@@ -1,108 +1,198 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 
-type Email = { id: string; address: string; source_url: string | null; domain: string | null; status: 'new' | 'sent' | 'failed'; contact_name?: string; position?: string; confidence?: number; source_type?: string; created_at: string }
+type Email = { id: string; address: string; source_url?: string | null; domain?: string | null; status: 'new' | 'sent' | 'failed'; contact_name?: string; position?: string; confidence?: number; source_type?: string; created_at?: string }
 type Site = { id: string; url: string; domain: string; last_crawled_at?: string; total_pages_crawled: number; total_emails_found: number }
 type Log = { msg: string; t: 'info' | 'ok' | 'err' | 'dim' | 'warn' }
+type Contact = { id: string; email: string; project: string; stage: string; seq: number; lastSent: string | null; opened: boolean; note: string }
 
-const D = {
-  b0:'#0f172a', b1:'#1e293b', b2:'#273548', b3:'#334155', b4:'#475569',
-  t1:'#f1f5f9', t2:'#94a3b8', t3:'#64748b',
-  bd:'#334155', bd2:'#475569',
-  blue:'#3b82f6', bdim:'#1e3a5f',
-  green:'#22c55e', gdim:'#14532d',
-  amber:'#f59e0b', adim:'#451a03',
-  red:'#ef4444', rdim:'#450a0a',
-  purple:'#a78bfa', pdim:'#2e1065',
-  teal:'#2dd4bf', tdim:'#042f2e',
-  cyan:'#06b6d4', cdim:'#083344',
+/* ─── Design tokens ─── */
+const C = {
+  b0:'#060910', b1:'#0D1117', b2:'#161B27', b3:'#1E2535', b4:'#2A3347',
+  t1:'#F1F5F9', t2:'#94A3B8', t3:'#4B5563',
+  blue:'#2563EB', blueDim:'#1E3A5F',
+  cyan:'#00D4FF', cyanDim:'#042F3E', cyanMid:'#0891B2',
+  green:'#10B981', greenDim:'#042F23',
+  amber:'#F59E0B', amberDim:'#3A2004',
+  red:'#EF4444', redDim:'#3A0505',
+  purple:'#8B5CF6', purpleDim:'#1E1040',
+  bd:'rgba(255,255,255,0.07)', bd2:'rgba(255,255,255,0.12)',
 }
 
-const lc = (t: Log['t']) => ({info:D.blue,ok:D.green,err:D.red,dim:D.t3,warn:D.amber})[t]
-
-const css = {
-  app: { background:D.b0, minHeight:'100vh', color:D.t1, fontFamily:'system-ui,sans-serif', fontSize:13 },
-  hdr: { background:D.b1, borderBottom:`1px solid ${D.bd}`, display:'flex', alignItems:'center', gap:10, padding:'0 18px', height:50 } as React.CSSProperties,
-  nav: { background:D.b1, borderBottom:`1px solid ${D.bd}`, display:'flex', padding:'0 6px', overflowX:'auto' as const },
-  body: { background:D.b0, padding:14 },
-  card: (accent?:string) => ({ background: accent||D.b1, border:`1px solid ${D.bd}`, borderRadius:10, padding:'13px 15px', marginBottom:10 } as React.CSSProperties),
-  stat: { background:D.b1, border:`1px solid ${D.bd}`, borderRadius:10, padding:'10px 12px' } as React.CSSProperties,
-  inp: { width:'100%', padding:'7px 10px', border:`1px solid ${D.bd}`, borderRadius:8, fontSize:12, background:D.b2, color:D.t1, outline:'none', boxSizing:'border-box' as const },
-  btn: (v?:string) => ({ padding: v==='xl'?'11px 18px':'7px 13px', borderRadius:8, cursor:'pointer', border:`1px solid ${D.bd}`, background: v==='p'?D.blue:v==='tg'?D.cdim:D.b2, color: v==='p'?'#fff':v==='tg'?D.cyan:D.t1, fontSize: v==='xl'?13:12, fontWeight: v==='p'||v==='xl'?500:400, borderColor: v==='p'?'transparent':v==='tg'?'#0e7490':D.bd, display:'inline-flex', alignItems:'center', gap:5, whiteSpace:'nowrap' as const } as React.CSSProperties),
-  prog: { height:3, background:D.b3, borderRadius:3, overflow:'hidden', marginBottom:8 } as React.CSSProperties,
-  logBox: { background:'#060d1a', border:`1px solid ${D.bd}`, borderRadius:8, padding:'10px 12px', fontFamily:'monospace', fontSize:11, lineHeight:1.9, maxHeight:160, overflowY:'auto' as const },
-  bdg: (bg:string,col:string) => ({ fontSize:10, padding:'2px 7px', borderRadius:20, fontWeight:500, background:bg, color:col, whiteSpace:'nowrap' as const, flexShrink:0 } as React.CSSProperties),
+/* ─── Style helpers ─── */
+const S = {
+  card: (accent?: string): React.CSSProperties => ({
+    background: accent || C.b1, border: `1px solid ${C.bd}`,
+    borderRadius: 10, padding: '13px 15px', marginBottom: 10,
+  }),
+  stat: (accent?: string): React.CSSProperties => ({
+    background: C.b1, border: `1px solid ${C.bd}`, borderRadius: 10,
+    padding: '12px 14px', position: 'relative', overflow: 'hidden',
+  }),
+  inp: { width: '100%', padding: '8px 11px', border: `1px solid ${C.bd}`, borderRadius: 8, fontSize: 12, background: C.b2, color: C.t1, outline: 'none', boxSizing: 'border-box', fontFamily: "'DM Sans',sans-serif" } as React.CSSProperties,
+  btn: (v?: string): React.CSSProperties => ({
+    padding: v === 'xl' ? '11px 18px' : v === 'sm' ? '5px 10px' : '8px 14px',
+    borderRadius: 8, cursor: 'pointer', fontSize: v === 'sm' ? 11 : 12,
+    fontWeight: 500, fontFamily: "'DM Sans',sans-serif", transition: 'all .18s',
+    display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' as const,
+    border: v === 'p' ? 'none' : v === 'tg' ? `1px solid rgba(0,212,255,.3)` : `1px solid ${C.bd}`,
+    background: v === 'p' ? C.blue : v === 'tg' ? C.cyanDim : C.b2,
+    color: v === 'p' ? '#fff' : v === 'tg' ? C.cyan : C.t1,
+  }),
+  bdg: (bg: string, col: string): React.CSSProperties => ({
+    fontSize: 10, padding: '2px 8px', borderRadius: 20, fontWeight: 500,
+    background: bg, color: col, whiteSpace: 'nowrap' as const, flexShrink: 0,
+    border: `1px solid ${col}22`,
+  }),
+  logBox: { background: '#03060d', border: `1px solid ${C.bd}`, borderRadius: 8, padding: '10px 12px', fontFamily: "'JetBrains Mono',monospace", fontSize: 11, lineHeight: 1.9, maxHeight: 160, overflowY: 'auto' as const },
+  prog: { height: 3, background: C.b3, borderRadius: 3, overflow: 'hidden', marginBottom: 8 } as React.CSSProperties,
+  row: { display: 'flex', gap: 8, alignItems: 'flex-end' } as React.CSSProperties,
 }
 
-const SITES_PRESET = [
-  {name:'BlockchainReporter',url:'https://blockchainreporter.net',icon:'⛓'},
-  {name:'CaptainAltcoin',url:'https://captainaltcoin.com',icon:'⚓'},
-  {name:'Coindoo',url:'https://coindoo.com',icon:'🪙'},
-  {name:'AnalyticsInsight',url:'https://analyticsinsight.net',icon:'📊'},
-  {name:'LiveBitcoinNews',url:'https://livebitcoinnews.com',icon:'₿'},
-  {name:'ZyCrypto',url:'https://zycrypto.com',icon:'🔐'},
-  {name:'MoneyCheck',url:'https://moneycheck.com',icon:'💰'},
-  {name:'ThePortugalNews',url:'https://theportugalnews.com',icon:'🌊'},
-  {name:'Optimisus',url:'https://optimisus.com',icon:'📈'},
-  {name:'CoinGabbar',url:'https://www.coingabbar.com',icon:'🪙'},
-  {name:'TimesTableid',url:'https://timestabloid.com',icon:'📰'},
-  {name:'CryptoTimes',url:'https://www.cryptotimes.io',icon:'⏰'},
-  {name:'TronWeekly',url:'https://www.tronweekly.com',icon:'⚡'},
-  {name:'CryptoBrowser',url:'https://cryptobrowser.io',icon:'🌐'},
-  {name:'GlobeNewswire',url:'https://www.globenewswire.com/en/search/keyword/crypto',icon:'🗞'},
-  {name:'Crypto.news',url:'https://crypto.news/sponsored/',icon:'📡'},
-  {name:'CryptoRank',url:'https://cryptorank.io/upcoming-ico',icon:'🏆'},
-  {name:'CoinMarketCap',url:'https://coinmarketcap.com/new/',icon:'📉'},
-  {name:'Crunchbase Crypto',url:'https://www.crunchbase.com/hub/cryptocurrency-companies',icon:'🔍'},
+const lc = (t: Log['t']) => ({ info: C.blue, ok: C.green, err: C.red, dim: C.t3, warn: C.amber })[t]
+
+const STAGES = ['new', 'contacted', 'interested', 'negotiating', 'closed', 'cold']
+const SL: Record<string, string> = { new: 'New', contacted: 'Contacted', interested: 'Interested', negotiating: 'Negotiating', closed: 'Closed', cold: 'Cold' }
+const SC: Record<string, [string, string]> = {
+  new: [`rgba(37,99,235,.15)`, '#60a5fa'], contacted: [`rgba(245,158,11,.12)`, C.amber],
+  interested: [`rgba(139,92,246,.12)`, C.purple], negotiating: [`rgba(249,115,22,.12)`, '#f97316'],
+  closed: [`rgba(16,185,129,.12)`, C.green], cold: [`rgba(75,85,99,.15)`, '#6b7280'],
+}
+const AV_COLORS: [string, string][] = [
+  [`rgba(37,99,235,.2)`, '#60a5fa'], [`rgba(139,92,246,.2)`, C.purple],
+  [`rgba(16,185,129,.2)`, C.green], [`rgba(245,158,11,.2)`, C.amber],
+  [`rgba(0,212,255,.15)`, C.cyan], [`rgba(239,68,68,.15)`, C.red],
 ]
 
+const SITES_PRESET = [
+  { n: 'BlockchainReporter', d: 'blockchainreporter.net', i: '⛓' },
+  { n: 'CaptainAltcoin', d: 'captainaltcoin.com', i: '⚓' },
+  { n: 'Coindoo', d: 'coindoo.com', i: '🪙' },
+  { n: 'AnalyticsInsight', d: 'analyticsinsight.net', i: '📊' },
+  { n: 'LiveBitcoinNews', d: 'livebitcoinnews.com', i: '₿' },
+  { n: 'ZyCrypto', d: 'zycrypto.com', i: '🔐' },
+  { n: 'MoneyCheck', d: 'moneycheck.com', i: '💰' },
+  { n: 'Optimisus', d: 'optimisus.com', i: '📈' },
+  { n: 'CoinGabbar', d: 'coingabbar.com', i: '🪙' },
+  { n: 'CryptoTimes', d: 'cryptotimes.io', i: '⏰' },
+  { n: 'TronWeekly', d: 'tronweekly.com', i: '⚡' },
+  { n: 'CryptoBrowser', d: 'cryptobrowser.io', i: '🌐' },
+  { n: 'GlobeNewswire', d: 'globenewswire.com', i: '🗞' },
+  { n: 'Crypto.news', d: 'crypto.news', i: '📡' },
+  { n: 'CryptoRank', d: 'cryptorank.io', i: '🏆' },
+  { n: 'CoinMarketCap', d: 'coinmarketcap.com', i: '📉' },
+  { n: 'Crunchbase Crypto', d: 'crunchbase.com', i: '🔍' },
+  { n: 'ThePortugalNews', d: 'theportugalnews.com', i: '🌊' },
+  { n: 'TimesTableid', d: 'timestabloid.com', i: '📰' },
+]
+
+const DEMO_CONTACTS: Omit<Contact, 'id'>[] = [
+  { email: 'press@alphadefi.io', project: 'AlphaDeFi', stage: 'contacted', seq: 1, lastSent: daysAgo(12), opened: true, note: '' },
+  { email: 'contact@tokenlaunch.com', project: 'TokenLaunch', stage: 'contacted', seq: 1, lastSent: daysAgo(9), opened: false, note: '' },
+  { email: 'media@cryptostake.io', project: 'CryptoStake', stage: 'interested', seq: 1, lastSent: daysAgo(3), opened: true, note: 'Reply: interested CMC' },
+  { email: 'info@nftmint.com', project: 'NFTMint', stage: 'new', seq: 0, lastSent: null, opened: false, note: '' },
+  { email: 'bd@web3pay.io', project: 'Web3Pay', stage: 'negotiating', seq: 2, lastSent: daysAgo(2), opened: true, note: 'Budget $800' },
+  { email: 'hello@defibank.io', project: 'DeFiBank', stage: 'contacted', seq: 3, lastSent: daysAgo(21), opened: false, note: '' },
+  { email: 'team@chainbridge.com', project: 'ChainBridge', stage: 'cold', seq: 3, lastSent: daysAgo(25), opened: false, note: 'No reply x3' },
+  { email: 'listing@metatoken.io', project: 'MetaToken', stage: 'closed', seq: 1, lastSent: daysAgo(5), opened: true, note: 'Closed $600' },
+  { email: 'pr@yieldmax.finance', project: 'YieldMax', stage: 'contacted', seq: 1, lastSent: daysAgo(11), opened: true, note: '' },
+  { email: 'media@dexprotocol.io', project: 'DexProtocol', stage: 'new', seq: 0, lastSent: null, opened: false, note: '' },
+]
+
+function uid() { return Math.random().toString(36).slice(2, 9) }
+function daysAgo(n: number) { const d = new Date(); d.setDate(d.getDate() - n); return d.toLocaleDateString('vi-VN') }
+function daysSince(s: string | null): number {
+  if (!s) return 999
+  const p = s.split('/'); if (p.length < 3) return 999
+  return Math.floor((Date.now() - new Date(+p[2], +p[1] - 1, +p[0]).getTime()) / 86400000)
+}
+function needsRemind(c: Contact) {
+  return !['closed', 'cold'].includes(c.stage) && c.lastSent && c.seq < 3 && daysSince(c.lastSent) >= 10
+}
+
+function StatBox({ label, value, color, sub }: { label: string; value: number | string; color?: string; sub?: string }) {
+  return (
+    <div style={S.stat()}>
+      <div style={{ fontSize: 10, color: C.t3, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 5, fontWeight: 600 }}>{label}</div>
+      <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 26, fontWeight: 600, color: color || C.t1, lineHeight: 1, marginBottom: 3 }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color: C.t3 }}>{sub}</div>}
+    </div>
+  )
+}
+
+function ProgBar({ pct, color }: { pct: number; color?: string }) {
+  return (
+    <div style={S.prog}>
+      <div style={{ height: '100%', width: `${pct}%`, background: color || C.blue, borderRadius: 3, transition: 'width .3s' }} />
+    </div>
+  )
+}
+
+function LogPane({ logs, pct, color }: { logs: Log[]; pct: number; color?: string }) {
+  return (
+    <div style={S.card()}>
+      <ProgBar pct={pct} color={color} />
+      <div style={S.logBox}>{logs.map((l, i) => <div key={i} style={{ color: lc(l.t) }}>{l.msg}</div>)}</div>
+    </div>
+  )
+}
+
 export default function Page() {
-  const [tab, setTab] = useState<'dash'|'sites'|'hunter'|'list'|'send'|'tracking'|'telegram'>('dash')
+  const [tab, setTab] = useState<string>('dash')
   const [emails, setEmails] = useState<Email[]>([])
   const [sites, setSites] = useState<Site[]>([])
+  const [contacts, setContacts] = useState<Contact[]>([])
+  const [openEvents, setOpenEvents] = useState<{ contact: string; email: string; time: string }[]>([])
+  const [tgMsgs, setTgMsgs] = useState<{ text: string; time: string }[]>([])
   const [busy, setBusy] = useState(false)
   const [sel, setSel] = useState<Set<string>>(new Set())
   const [fSt, setFSt] = useState('all')
   const [fSrc, setFSrc] = useState('all')
-  const [search, setSearch] = useState('')
+  const [cSearch, setCSearch] = useState('')
+  const [cStage, setCStage] = useState('all')
+  const [cOp, setCOp] = useState('all')
   const [findLog, setFindLog] = useState<Log[]>([])
   const [hunterLog, setHunterLog] = useState<Log[]>([])
   const [crawlLog, setCrawlLog] = useState<Log[]>([])
   const [sendLog, setSendLog] = useState<Log[]>([])
+  const [remindLog, setRemindLog] = useState<Log[]>([])
   const [fp, setFp] = useState(0)
   const [hp, setHp] = useState(0)
   const [cp, setCp] = useState(0)
   const [sp, setSp] = useState(0)
+  const [rp, setRp] = useState(0)
+  const [dashPo, setDashPo] = useState(0)
+  const [dashLog, setDashLog] = useState<Log[]>([])
+  const [showDashLog, setShowDashLog] = useState(false)
   const [urlInput, setUrlInput] = useState('')
   const [findMode, setFindMode] = useState('contact')
   const [manual, setManual] = useState('')
   const [hunterDoms, setHunterDoms] = useState('')
   const [hunterMode, setHunterMode] = useState('bod')
   const [newSiteUrl, setNewSiteUrl] = useState('')
-  const [crawlingId, setCrawlingId] = useState<string|null>(null)
+  const [newSiteName, setNewSiteName] = useState('')
+  const [crawlingSite, setCrawlingSite] = useState<string | null>(null)
   const [fromName, setFromName] = useState('LEON (Mr.)')
   const [fromEmail, setFromEmail] = useState('leon@coincu.com')
   const [subject, setSubject] = useState('Boost {{project}} Visibility — Coincu PR & CMC Top News')
-  const [body, setBody] = useState(`Hi {{project}},\n\nI came across your recent press release and wanted to reach out about amplifying {{project}} visibility further.\n\nAt Coincu, we offer:\n• Press Release Distribution\n• CoinMarketCap Top News Listing\n• Sponsored Articles\n• Organic Coverage\n\nWe have helped 200+ blockchain projects boost their reach.\n\nFeel free to drop me a message via Telegram: https://t.me/iamleonnn\n\nBest,\nLEON (Mr.)\nChief Business Development Officer — Coincu\nE: leon@coincu.com`)
+  const [body, setBody] = useState(`Hi {{project}},\n\nI came across your recent press release and wanted to reach out about amplifying {{project}} visibility further.\n\nAt Coincu, we offer:\n• Press Release Distribution\n• CoinMarketCap Top News Listing\n• Sponsored Articles\n• Organic Coverage\n\nWe have helped 200+ blockchain projects boost their reach.\n\nFeel free to message me on Telegram: https://t.me/iamleonnn\n\nBest,\nLEON (Mr.)\nChief Business Development Officer — Coincu\nE: leon@coincu.com`)
   const [preview, setPreview] = useState('')
+  const [sendDone, setSendDone] = useState<{ ok: number; fail: number; skip: number } | null>(null)
   const [tgToken, setTgToken] = useState('')
   const [tgChat, setTgChat] = useState('')
-  const [tgStatus, setTgStatus] = useState<'idle'|'ok'|'err'>('idle')
-  const [tgMsgs, setTgMsgs] = useState<{text:string,time:string}[]>([])
-  const [openEvents, setOpenEvents] = useState<{email:string,project:string,time:string}[]>([])
+  const [tgOk, setTgOk] = useState<boolean | null>(null)
   const [dups, setDups] = useState(0)
   const [skipped, setSkipped] = useState(0)
 
   const loadEmails = useCallback(async () => {
-    const p = new URLSearchParams()
-    if (fSt !== 'all') p.set('status', fSt)
-    if (search) p.set('search', search)
     try {
+      const p = new URLSearchParams()
+      if (fSt !== 'all') p.set('status', fSt)
       const r = await fetch(`/api/emails?${p}`)
       const d = await r.json()
       if (d.emails) setEmails(d.emails)
     } catch {}
-  }, [fSt, search])
+  }, [fSt])
 
   const loadSites = useCallback(async () => {
     try {
@@ -115,343 +205,529 @@ export default function Page() {
   useEffect(() => { loadEmails() }, [loadEmails])
   useEffect(() => { if (tab === 'sites') loadSites() }, [tab, loadSites])
 
-  const addLog = (set:any, msg:string, t:Log['t']='info') => set((p:Log[]) => [...p, {msg,t}])
+  const addLog = (set: any, msg: string, t: Log['t'] = 'info') => set((p: Log[]) => [...p, { msg, t }])
+  const addTgMsg = (text: string) => setTgMsgs(p => [{ text, time: new Date().toLocaleTimeString('vi-VN') }, ...p.slice(0, 9)])
 
   const unsentCount = emails.filter(e => e.status === 'new').length
   const sentCount = emails.filter(e => e.status === 'sent').length
   const bodCount = emails.filter(e => e.source_type === 'hunter_bod').length
-  const openCount = openEvents.length
+  const remindCount = contacts.filter(needsRemind).length
 
   async function doFind() {
-    const urls = urlInput.split('\n').map(u=>u.trim()).filter(Boolean)
+    const urls = urlInput.split('\n').map(u => u.trim()).filter(Boolean)
     if (!urls.length) return alert('Nhập ít nhất 1 URL')
     setFindLog([]); setFp(0); setBusy(true)
     addLog(setFindLog, `▶ Quét ${urls.length} URL...`, 'info')
     try {
-      const r = await fetch('/api/find-emails', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({urls,mode:findMode})})
+      const r = await fetch('/api/find-emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ urls, mode: findMode }) })
       const d = await r.json()
-      for (let i=0;i<(d.results||[]).length;i++) {
-        const x=d.results[i]; setFp(Math.round((i+1)/d.results.length*100))
-        if (x.error) addLog(setFindLog,`✗ ${x.domain}: ${x.error}`,'err')
-        else { addLog(setFindLog,`✓ ${x.domain} — ${x.added} mới · ${x.found-x.added} trùng`,'ok'); x.emails?.forEach((e:any)=>addLog(setFindLog,`  → ${e.addr}`,'ok')) }
+      for (let i = 0; i < (d.results || []).length; i++) {
+        const x = d.results[i]; setFp(Math.round((i + 1) / d.results.length * 100))
+        if (x.error) addLog(setFindLog, `✗ ${x.domain}: ${x.error}`, 'err')
+        else { addLog(setFindLog, `✓ ${x.domain} — ${x.added} mới · ${x.found - x.added} trùng`, x.added > 0 ? 'ok' : 'dim') }
       }
-    } catch (e:any) { addLog(setFindLog, `✗ ${e.message}`, 'err') }
-    addLog(setFindLog,'─── xong ───','dim'); setBusy(false); loadEmails()
+    } catch (e: any) { addLog(setFindLog, `✗ ${e.message}`, 'err') }
+    addLog(setFindLog, '─── xong ───', 'dim'); setBusy(false); loadEmails()
   }
 
   async function doManual() {
     if (!manual.trim()) return
-    const [addr,src] = manual.split(',').map(s=>s.trim())
+    const [addr, src] = manual.split(',').map(s => s.trim())
     try {
-      const r = await fetch('/api/emails',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({address:addr,source_url:src||null})})
+      const r = await fetch('/api/emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address: addr, source_url: src || null }) })
       const d = await r.json()
       if (d.error) return alert(d.error)
-      setManual(''); addLog(setFindLog,`✓ Thêm: ${addr}`,'ok'); loadEmails()
+      setManual(''); loadEmails()
     } catch {}
   }
 
   async function doHunter() {
-    const domains = hunterDoms.split('\n').map(d=>d.trim()).filter(Boolean)
+    const domains = hunterDoms.split('\n').map(d => d.trim()).filter(Boolean)
     if (!domains.length) return alert('Nhập ít nhất 1 domain')
     setHunterLog([]); setHp(0); setBusy(true)
-    addLog(setHunterLog,`▶ Hunter.io — ${hunterMode==='bod'?'Chỉ BOD':'Tất cả'} từ ${domains.length} domain...`,'info')
+    addLog(setHunterLog, `▶ Hunter.io — ${hunterMode === 'bod' ? 'BOD' : 'All'} từ ${domains.length} domain...`, 'info')
     try {
-      const r = await fetch('/api/hunter',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({domains,mode:hunterMode})})
+      const r = await fetch('/api/hunter', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ domains, mode: hunterMode }) })
       const d = await r.json()
-      for (let i=0;i<(d.results||[]).length;i++) {
-        const x=d.results[i]; setHp(Math.round((i+1)/d.results.length*100))
-        if (x.error) { addLog(setHunterLog,`✗ ${x.domain}: ${x.error}`,'err'); continue }
-        addLog(setHunterLog,`✓ ${x.domain} — ${x.added} mới · ${x.skipped} trùng`,x.added>0?'ok':'dim')
-        x.emails?.forEach((e:any)=>addLog(setHunterLog,`  → ${e.addr} | ${e.name||'?'} | ${e.position||'?'}${e.isBOD?' 👑':''} (${e.confidence}%)`,'ok'))
+      for (let i = 0; i < (d.results || []).length; i++) {
+        const x = d.results[i]; setHp(Math.round((i + 1) / d.results.length * 100))
+        if (x.error) { addLog(setHunterLog, `✗ ${x.domain}: ${x.error}`, 'err'); continue }
+        addLog(setHunterLog, `✓ ${x.domain} — ${x.added} mới · ${x.skipped} trùng`, x.added > 0 ? 'ok' : 'dim')
+        x.emails?.forEach((e: any) => addLog(setHunterLog, `  → ${e.addr} | ${e.name || '?'} | ${e.position || '?'}${e.isBOD ? ' 👑' : ''} (${e.confidence}%)`, 'ok'))
       }
-    } catch (e:any) { addLog(setHunterLog,`✗ ${e.message}`,'err') }
-    addLog(setHunterLog,'─── xong ───','dim'); setBusy(false); loadEmails()
+    } catch (e: any) { addLog(setHunterLog, `✗ ${e.message}`, 'err') }
+    addLog(setHunterLog, '─── xong ───', 'dim'); setBusy(false); loadEmails()
   }
 
-  async function crawlSite(site:Site) {
-    setCrawlingId(site.id); setCrawlLog([]); setCp(0)
-    addLog(setCrawlLog,`▶ Quét bài mới từ ${site.domain}...`,'info')
+  async function crawlSite(site: Site) {
+    setCrawlingSite(site.id); setCrawlLog([]); setCp(0)
+    addLog(setCrawlLog, `▶ Quét bài mới từ ${site.domain}...`, 'info')
     try {
-      const r = await fetch('/api/crawl-site',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({siteUrl:site.url,maxPages:8})})
+      const r = await fetch('/api/crawl-site', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: site.url, maxPages: 8 }) })
       const d = await r.json()
-      if (d.error) { addLog(setCrawlLog,`✗ ${d.error}`,'err'); setCrawlingId(null); return }
-      for (let i=0;i<(d.results||[]).length;i++) {
-        const x=d.results[i]; setCp(Math.round((i+1)/d.results.length*100))
-        addLog(setCrawlLog,`📄 ${x.title||x.url}`,'info')
-        x.newEmails?.forEach((e:string)=>addLog(setCrawlLog,`  ✓ ${e}`,'ok'))
-        if (x.skipped>0) addLog(setCrawlLog,`  ~ ${x.skipped} trùng`,'warn')
+      if (d.error) { addLog(setCrawlLog, `✗ ${d.error}`, 'err'); setCrawlingSite(null); return }
+      for (let i = 0; i < (d.results || []).length; i++) {
+        const x = d.results[i]; setCp(Math.round((i + 1) / d.results.length * 100))
+        addLog(setCrawlLog, `📄 ${x.title || x.url}`, 'info')
+        x.newEmails?.forEach((e: string) => addLog(setCrawlLog, `  ✓ ${e}`, 'ok'))
+        if (x.skipped > 0) addLog(setCrawlLog, `  ~ ${x.skipped} trùng`, 'warn')
       }
-      addLog(setCrawlLog,`─── ${d.pagesScanned} trang · ${d.newEmails} email mới ───`,'ok')
-    } catch (e:any) { addLog(setCrawlLog,`✗ ${e.message}`,'err') }
-    setCrawlingId(null); loadSites(); loadEmails()
+      addLog(setCrawlLog, `─── ${d.pagesScanned} trang · ${d.newEmails} email mới ───`, 'ok')
+    } catch (e: any) { addLog(setCrawlLog, `✗ ${e.message}`, 'err') }
+    setCrawlingSite(null); loadSites(); loadEmails()
+  }
+
+  async function runAutoRemind() {
+    const needs = contacts.filter(needsRemind)
+    if (!needs.length) { alert('Không có contact nào cần remind'); return }
+    setRemindLog([]); setRp(0); setBusy(true)
+    addLog(setRemindLog, `▶ Auto-remind ${needs.length} contacts...`, 'info')
+    for (let i = 0; i < needs.length; i++) {
+      const c = needs[i]; setRp(Math.round((i + 1) / needs.length * 100))
+      await new Promise(r => setTimeout(r, 200))
+      setContacts(prev => prev.map(x => x.id === c.id ? {
+        ...x, seq: x.seq + 1,
+        lastSent: new Date().toLocaleDateString('vi-VN'),
+        stage: x.seq + 1 >= 3 ? 'cold' : x.stage === 'new' ? 'contacted' : x.stage
+      } : x))
+      addLog(setRemindLog, `  ✓ ${c.project} — Follow-up #${c.seq + 1}`, 'ok')
+    }
+    addLog(setRemindLog, `─── ${needs.length} follow-ups sent ───`, 'dim')
+    addTgMsg(`⏰ Auto-remind: ${needs.length} follow-ups gửi xong`)
+    setBusy(false)
   }
 
   async function doSend() {
-    if (!fromName||!fromEmail||!subject||!body) return alert('Điền đầy đủ')
+    if (!fromName || !fromEmail || !subject || !body) return alert('Điền đầy đủ')
     if (!confirm(`Gửi đến ${unsentCount} email?`)) return
-    setSendLog([]); setSp(0); setBusy(true)
+    setSendLog([]); setSp(0); setSendDone(null); setBusy(true)
     try {
-      const r = await fetch('/api/send-emails',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fromName,fromEmail,subject,body})})
+      const r = await fetch('/api/send-emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fromName, fromEmail, subject, body }) })
       const d = await r.json()
-      ;(d.results||[]).forEach((x:any,i:number)=>{
-        setSp(Math.round((i+1)/d.results.length*100))
-        addLog(setSendLog,x.status==='success'?`✓ ${x.address}`:`✗ ${x.address}: ${x.error}`,x.status==='success'?'ok':'err')
+      const skip = emails.filter(e => e.status === 'sent').length
+      ;(d.results || []).forEach((x: any, i: number) => {
+        setSp(Math.round((i + 1) / d.results.length * 100))
+        addLog(setSendLog, x.status === 'success' ? `✓ ${x.address}` : `✗ ${x.address}: ${x.error}`, x.status === 'success' ? 'ok' : 'err')
       })
-      addLog(setSendLog,`─── ${d.sent} thành công / ${d.failed} thất bại ───`,'ok')
-    } catch (e:any) { addLog(setSendLog,`✗ ${e.message}`,'err') }
+      setSendDone({ ok: d.sent, fail: d.failed, skip })
+      addTgMsg(`✅ Gửi xong: ${d.sent} thành công · ${d.failed} lỗi`)
+    } catch (e: any) { addLog(setSendLog, `✗ ${e.message}`, 'err') }
     setBusy(false); loadEmails()
   }
 
   async function testTelegram() {
-    if (!tgToken||!tgChat) return alert('Nhập Bot Token và Chat ID')
+    if (!tgToken || !tgChat) return alert('Nhập Bot Token và Chat ID')
     try {
       const r = await fetch('/api/telegram')
       const d = await r.json()
-      setTgStatus(d.ok?'ok':'err')
-      if (d.ok) { setTgMsgs(p=>[{text:`✅ Kết nối thành công! Bot: @${d.bot}`,time:new Date().toLocaleTimeString('vi-VN')},...p]) }
-    } catch { setTgStatus('err') }
+      setTgOk(d.ok)
+      if (d.ok) addTgMsg(`✅ Kết nối thành công! Bot: @${d.bot}`)
+    } catch { setTgOk(false) }
   }
 
   async function addSiteAndCrawl() {
     if (!newSiteUrl.trim()) return
-    const domain = newSiteUrl.replace(/https?:\/\//,'').split('/')[0].replace('www.','')
-    if (sites.find(s=>s.domain===domain)) return alert('Site đã tồn tại')
+    const domain = newSiteUrl.replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
+    if (sites.find(s => s.domain === domain)) return alert('Site đã tồn tại')
     try {
-      await fetch('/api/crawl-site',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({siteUrl:newSiteUrl.trim(),maxPages:1})})
-      setNewSiteUrl(''); loadSites()
+      await fetch('/api/crawl-site', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: newSiteUrl.trim(), maxPages: 1 }) })
+      setNewSiteUrl(''); setNewSiteName(''); loadSites()
     } catch {}
   }
 
-  const filtered = emails.filter(e=>{ const mq=!search||e.address.includes(search)||(e.domain||'').includes(search); const ms=fSt==='all'||e.status===fSt; const mr=fSrc==='all'||e.source_type===fSrc; return mq&&ms&&mr })
-
-  const TABS = [['dash','🏠 Dashboard'],['sites','🕷 Bài viết'],['hunter','🎯 Hunter BOD'],['list','📋 Danh sách'],['send','✉️ Gửi'],['tracking','👁 Tracking'],['telegram','📱 Telegram']] as const
-
-  const SectionCard = ({children, accent}:{children:React.ReactNode,accent?:string}) => (
-    <div style={css.card(accent)}>{children}</div>
-  )
-
-  const StatGrid = ({items}:{items:[string,number|string,string?][]}) => (
-    <div style={{display:'grid',gridTemplateColumns:`repeat(${items.length},1fr)`,gap:8,marginBottom:10}}>
-      {items.map(([l,v,c])=>(
-        <div key={l as string} style={css.stat}>
-          <div style={{fontSize:10,color:D.t3,marginBottom:3}}>{l}</div>
-          <div style={{fontSize:22,fontWeight:500,color:c||D.t1}}>{v}</div>
-        </div>
-      ))}
-    </div>
-  )
-
-  const LogPane = ({logs,pct}:{logs:Log[],pct:number}) => (
-    <div style={css.card()}>
-      <div style={{...css.prog}}><div style={{height:'100%',width:`${pct}%`,background:D.blue,borderRadius:3,transition:'width .3s'}}/></div>
-      <div style={css.logBox}>{logs.map((l,i)=><div key={i} style={{color:lc(l.t)}}>{l.msg}</div>)}</div>
-    </div>
-  )
-
-  const srcLabel = (t?:string) => ({hunter_bod:'BOD 👑',hunter:'Hunter',article:'Bài viết',crunchbase:'Crunchbase',manual:'Thủ công'})[t||'']||'Thủ công'
-  const srcBg = (t?:string):React.CSSProperties => {
-    const m:any={hunter_bod:[D.adim,D.amber],hunter:[D.pdim,D.purple],article:[D.bdim,D.blue],crunchbase:[D.rdim,D.red],manual:[D.b3,D.t2]}
-    const[bg,col]=m[t||'manual']||m.manual; return css.bdg(bg,col)
+  async function simulateOpen() {
+    const e = emails.find(x => x.status === 'sent') || emails[0]
+    if (!e) return
+    const ev = { contact: e.contact_name || e.address, email: e.address, time: new Date().toLocaleTimeString('vi-VN') }
+    setOpenEvents(p => [ev, ...p])
+    addTgMsg(`👁 ${ev.contact} vừa mở email!\n📧 ${ev.email}`)
   }
-  const stBg = (s:string):React.CSSProperties => {
-    if(s==='sent') return css.bdg(D.gdim,D.green)
-    if(s==='failed') return css.bdg(D.rdim,D.red)
-    return css.bdg(D.adim,D.amber)
+
+  const filteredEmails = emails.filter(e => {
+    const ms = fSt === 'all' || e.status === fSt
+    const mr = fSrc === 'all' || e.source_type === fSrc
+    return ms && mr
+  })
+  const filteredContacts = contacts.filter(c => {
+    const mq = !cSearch || c.email.includes(cSearch) || c.project.toLowerCase().includes(cSearch.toLowerCase())
+    const ms = cStage === 'all' || c.stage === cStage
+    const mo = cOp === 'all' || (cOp === 'opened' && c.opened) || (cOp === 'not_opened' && !c.opened)
+    return mq && ms && mo
+  })
+
+  const srcLabel = (t?: string) => ({ hunter_bod: 'BOD 👑', hunter: 'Hunter', article: 'Bài viết', crunchbase: 'Crunchbase', manual: 'Thủ công' })[t || ''] || 'Thủ công'
+  const srcBdg = (t?: string): React.CSSProperties => {
+    const m: any = { hunter_bod: [C.amberDim, C.amber], hunter: [C.purpleDim, C.purple], article: [C.blueDim, C.blue], crunchbase: [C.redDim, C.red], manual: [C.b3, C.t2] }
+    const [bg, col] = m[t || 'manual'] || m.manual; return S.bdg(bg, col)
   }
+  const stBdg = (s: string): React.CSSProperties => {
+    if (s === 'sent') return S.bdg(C.greenDim, C.green)
+    if (s === 'failed') return S.bdg(C.redDim, C.red)
+    return S.bdg(C.amberDim, C.amber)
+  }
+
+  const TABS = [
+    ['dash', '🏠 Dashboard'], ['sites', '🕷 Bài viết'], ['hunter', '🎯 Hunter BOD'],
+    ['remind', '🔔 Remind'], ['pipeline', '📊 Pipeline'], ['contacts', '👥 Contacts'],
+    ['send', '✉️ Gửi'], ['tracking', '👁 Tracking'], ['telegram', '📱 Telegram'],
+  ] as const
+
+  const hdrKpis = [
+    ['Emails', emails.length, C.t1], ['Chưa gửi', unsentCount, C.amber],
+    ['Đã gửi', sentCount, C.green], ['Opened', openEvents.length, C.cyan],
+    ['Remind', remindCount, C.red],
+  ] as [string, number, string][]
 
   return (
-    <div style={css.app}>
-      {/* HEADER */}
-      <div style={css.hdr}>
-        <span style={{fontSize:18}}>₿</span>
-        <span style={{fontWeight:500,fontSize:15}}>Crypto Email Finder</span>
-        <span style={{fontSize:10,background:D.b3,color:D.t2,padding:'2px 8px',borderRadius:20}}>19 sites · crypto only</span>
-        <span style={{fontSize:10,background:D.gdim,color:D.green,padding:'2px 8px',borderRadius:20,border:`1px solid ${D.gdim}`}}>Tracking ON</span>
-        <div style={{marginLeft:'auto',display:'flex',gap:16}}>
-          {([['Email',emails.length,D.t1],['Chưa gửi',unsentCount,D.amber],['Đã gửi',sentCount,D.green],['BOD',bodCount,D.purple],['Opened',openCount,D.cyan]] as [string,number,string][]).map(([l,v,c])=>(
-            <div key={l} style={{textAlign:'center'}}>
-              <div style={{fontSize:15,fontWeight:500,color:c,lineHeight:1}}>{v}</div>
-              <div style={{fontSize:10,color:D.t3,marginTop:2}}>{l}</div>
+    <div style={{ background: C.b0, minHeight: '100vh', color: C.t1, fontSize: 13 }}>
+
+      {/* ── HEADER ── */}
+      <div style={{ background: C.b1, borderBottom: `1px solid ${C.bd}`, display: 'flex', alignItems: 'center', gap: 12, padding: '0 18px', height: 52 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 28, height: 28, background: C.blue, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 600, color: '#fff', fontFamily: "'Space Grotesk',sans-serif" }}>C</div>
+          <div>
+            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14 }}>Coincu</div>
+            <div style={{ fontSize: 10, color: C.t3, letterSpacing: '.05em', textTransform: 'uppercase' }}>Sales Intelligence</div>
+          </div>
+        </div>
+        <div style={{ width: 1, height: 28, background: C.bd, margin: '0 4px' }} />
+        <div style={{ fontSize: 11, color: C.t3 }}>
+          <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: C.green, marginRight: 5, verticalAlign: 'middle' }} />
+          19 sites · crypto only · tracking live
+        </div>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 18 }}>
+          {hdrKpis.map(([l, v, c]) => (
+            <div key={l} style={{ textAlign: 'center' }}>
+              <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 17, fontWeight: 600, color: c, lineHeight: 1 }}>{v}</div>
+              <div style={{ fontSize: 10, color: C.t3, marginTop: 2, textTransform: 'uppercase', letterSpacing: '.06em' }}>{l}</div>
             </div>
           ))}
         </div>
       </div>
 
-      {/* NAV */}
-      <div style={css.nav}>
-        {TABS.map(([k,l])=>(
-          <button key={k} onClick={()=>setTab(k)} style={{padding:'10px 13px',border:'none',background:'none',cursor:'pointer',fontSize:12,fontWeight:tab===k?500:400,color:tab===k?D.t1:D.t2,borderBottom:`2px solid ${tab===k?D.blue:'transparent'}`,marginBottom:-1,whiteSpace:'nowrap' as const,transition:'all .15s'}}>{l}</button>
+      {/* ── NAV ── */}
+      <div style={{ background: C.b1, borderBottom: `1px solid ${C.bd}`, display: 'flex', padding: '0 4px', overflowX: 'auto' }}>
+        {TABS.map(([k, l]) => (
+          <button key={k} onClick={() => setTab(k)} style={{
+            padding: '10px 13px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 12,
+            fontWeight: tab === k ? 500 : 400, color: tab === k ? C.t1 : C.t2,
+            borderBottom: `2px solid ${tab === k ? C.blue : 'transparent'}`, marginBottom: -1,
+            whiteSpace: 'nowrap', transition: 'all .18s', fontFamily: "'DM Sans',sans-serif",
+            display: 'flex', alignItems: 'center', gap: 5,
+          }}>
+            {l}
+            {k === 'remind' && remindCount > 0 && <span style={{ fontSize: 10, background: C.redDim, color: C.red, padding: '1px 6px', borderRadius: 20, border: `1px solid ${C.red}33` }}>{remindCount}</span>}
+            {k === 'contacts' && contacts.length > 0 && <span style={{ fontSize: 10, background: C.blueDim, color: C.cyan, padding: '1px 6px', borderRadius: 20, border: `1px solid ${C.cyan}33` }}>{contacts.length}</span>}
+            {k === 'tracking' && openEvents.length > 0 && <span style={{ fontSize: 10, background: C.greenDim, color: C.green, padding: '1px 6px', borderRadius: 20, border: `1px solid ${C.green}33` }}>{openEvents.length}</span>}
+          </button>
         ))}
       </div>
 
-      {/* BODY */}
-      <div style={css.body}>
+      {/* ── BODY ── */}
+      <div style={{ padding: 14, maxWidth: 1200, margin: '0 auto' }}>
 
         {/* DASHBOARD */}
-        {tab==='dash' && <>
-          <SectionCard accent='#130c00'>
-            <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:5}}>
-              <span style={{color:D.amber,fontSize:13}}>⚠</span>
-              <span style={{fontWeight:500,color:D.amber,fontSize:13}}>Bộ lọc Crypto Only đang bật</span>
+        {tab === 'dash' && <>
+          <div style={{ ...S.card(`linear-gradient(135deg,${C.b1} 0%,#180e00 100%)`), border: `1px solid rgba(245,158,11,.25)`, marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+              <span style={{ color: C.amber, fontSize: 14 }}>⚠</span>
+              <span style={{ fontWeight: 600, color: C.amber, fontSize: 13, fontFamily: "'Space Grotesk',sans-serif" }}>Bộ lọc Crypto Only</span>
+              <span style={S.bdg(`rgba(245,158,11,.12)`, C.amber)}>Active</span>
             </div>
-            <p style={{fontSize:11,color:'#a06010',lineHeight:1.6}}>Chỉ lấy email từ dự án: blockchain, crypto, DeFi, NFT, Web3, token, coin, exchange, wallet. Dự án không liên quan bị bỏ qua tự động.</p>
-          </SectionCard>
-          <SectionCard>
-            <div style={{fontSize:14,fontWeight:500,marginBottom:4}}>Quét 19 crypto sites</div>
-            <div style={{fontSize:11,color:D.t3,marginBottom:12}}>Nhấn 1 nút — tự quét, lọc crypto, bỏ trùng, gửi Telegram khi xong</div>
-            <div style={{display:'flex',gap:8,flexWrap:'wrap'}}>
-              <button style={css.btn('xl')} onClick={()=>setTab('sites')}>🕷 Quét tất cả sites</button>
-              <button style={css.btn('p')} onClick={()=>setTab('hunter')}>🎯 Hunter BOD</button>
-              <button style={css.btn('tg')} onClick={()=>setTab('telegram')}>📱 Telegram</button>
-            </div>
-          </SectionCard>
-          <StatGrid items={[['Tổng email',emails.length],['Chưa gửi',unsentCount,D.amber],['Đã gửi',sentCount,D.green],['BOD Hunter',bodCount,D.purple]]}/>
-          <StatGrid items={[['Sites theo dõi',sites.length||19],['Tracking opened',openCount,D.cyan],['Non-crypto lọc',skipped,D.red],['Trùng chặn',dups,D.amber]]}/>
+            <p style={{ fontSize: 11, color: '#9a7020', lineHeight: 1.6 }}>Chỉ lấy email từ dự án: blockchain, crypto, DeFi, NFT, Web3, token, coin, exchange, wallet. Dự án không liên quan bị bỏ qua tự động.</p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 10 }}>
+            <StatBox label="Tổng email" value={emails.length} sub="trong database" />
+            <StatBox label="Chưa gửi" value={unsentCount} color={C.amber} sub="sẵn sàng outreach" />
+            <StatBox label="Đã gửi" value={sentCount} color={C.green} sub="tổng cộng" />
+            <StatBox label="BOD Hunter" value={bodCount} color={C.purple} sub="CEO/CFO/CMO" />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 14 }}>
+            <StatBox label="Opened" value={openEvents.length} color={C.cyan} sub="đã mở email" />
+            <StatBox label="Cần Remind" value={remindCount} color={C.red} sub="quá 10 ngày" />
+            <StatBox label="Non-crypto" value={skipped} sub="đã lọc bỏ" />
+            <StatBox label="Sites" value={19} sub="đang theo dõi" />
+          </div>
+
+          <div style={{ fontSize: 10, fontWeight: 600, color: C.t3, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            Quick Actions <div style={{ flex: 1, height: 1, background: C.bd }} />
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+            <button style={{ ...S.btn('xl'), ...{ background: C.blue, color: '#fff', border: 'none' } }} onClick={() => setTab('sites')}>🕷 Quét 19 sites</button>
+            <button style={S.btn('xl')} onClick={() => setTab('hunter')}>🎯 Hunter BOD</button>
+            <button style={S.btn('xl')} onClick={() => { setTab('remind'); runAutoRemind() }}>🔔 Auto-remind</button>
+            <button style={{ ...S.btn('xl'), ...{ background: C.cyanDim, border: `1px solid rgba(0,212,255,.3)`, color: C.cyan } }} onClick={() => {
+              setContacts(DEMO_CONTACTS.map(d => ({ ...d, id: uid() })))
+              setEmails(DEMO_CONTACTS.map(c => ({ id: uid(), address: c.email, domain: c.email.split('@')[1], status: c.stage === 'closed' ? 'sent' as const : 'new' as const, contact_name: c.project, source_type: ['article', 'hunter_bod', 'hunter'][Math.floor(Math.random() * 3)] })))
+            }}>✨ Load demo data</button>
+          </div>
+
+          {showDashLog && dashLog.length > 0 && <LogPane logs={dashLog} pct={dashPo} />}
+
+          <div style={{ fontSize: 10, fontWeight: 600, color: C.t3, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            Activity feed <div style={{ flex: 1, height: 1, background: C.bd }} />
+          </div>
+          <div style={S.card()}>
+            {[
+              ['👁', 'rgba(0,212,255,.15)', 'AlphaDeFi opened email', '2 phút trước'],
+              ['📧', 'rgba(37,99,235,.15)', 'Gửi 8 email mới thành công', '15 phút trước'],
+              ['🎯', 'rgba(139,92,246,.15)', 'Hunter: +3 BOD từ cryptotimes.io', '1 giờ trước'],
+              ['⏰', 'rgba(245,158,11,.15)', 'Auto-remind: 2 follow-ups đã gửi', '8h sáng nay'],
+              ['🕷', 'rgba(16,185,129,.15)', 'Quét xong livebitcoinnews.com: +4 email', 'Hôm qua'],
+            ].map(([icon, bg, title, time]) => (
+              <div key={title as string} style={{ display: 'flex', gap: 10, padding: '8px 0', borderBottom: `1px solid rgba(255,255,255,.04)` }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: bg as string, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>{icon}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 2 }}>{title}</div>
+                  <div style={{ fontSize: 10, color: C.t3, fontFamily: "'JetBrains Mono',monospace" }}>{time}</div>
+                </div>
+              </div>
+            ))}
+          </div>
         </>}
 
         {/* SITES */}
-        {tab==='sites' && <>
-          <SectionCard>
-            <label style={{fontSize:11,color:D.t2,display:'block',marginBottom:4}}>Thêm site đối thủ mới</label>
-            <div style={{display:'flex',gap:8}}>
-              <input value={newSiteUrl} onChange={e=>setNewSiteUrl(e.target.value)} placeholder="https://newcryptosite.com/press-release/" style={{...css.inp,flex:1}} onKeyDown={e=>e.key==='Enter'&&addSiteAndCrawl()} />
-              <button style={css.btn('p')} onClick={addSiteAndCrawl}>+ Thêm</button>
+        {tab === 'sites' && <>
+          <div style={S.card()}>
+            <label style={{ fontSize: 11, color: C.t2, display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>Thêm site đối thủ mới</label>
+            <div style={S.row}>
+              <input value={newSiteUrl} onChange={e => setNewSiteUrl(e.target.value)} placeholder="https://newcryptosite.com/press-release/" style={{ ...S.inp, flex: 1 }} onKeyDown={e => e.key === 'Enter' && addSiteAndCrawl()} />
+              <input value={newSiteName} onChange={e => setNewSiteName(e.target.value)} placeholder="Tên site" style={{ ...S.inp, width: 130 }} />
+              <button style={{ ...S.btn('p') }} onClick={addSiteAndCrawl}>+ Thêm</button>
             </div>
-          </SectionCard>
-          {SITES_PRESET.map((preset,i)=>{
-            const site = sites.find(s=>s.domain===preset.url.replace(/https?:\/\//,'').split('/')[0].replace('www.',''))
-            const running = crawlingId === site?.id
+          </div>
+
+          {SITES_PRESET.map((preset) => {
+            const site = sites.find(s => s.domain === preset.d)
+            const running = crawlingSite === site?.id
             return (
-              <div key={i} style={{...css.card(), display:'flex', alignItems:'center', gap:10, borderColor:running?D.blue:D.bd, background:running?'#0a1525':D.b1}}>
-                <div style={{width:28,height:28,borderRadius:8,background:D.b3,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0}}>{preset.icon}</div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontWeight:500,fontSize:12,marginBottom:2}}>{preset.name}</div>
-                  <div style={{fontSize:10,color:D.t3,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{preset.url}</div>
-                  {site && <div style={{display:'flex',gap:12,marginTop:4}}>
-                    {[['Quét',site.total_pages_crawled+' trang'],['Email',site.total_emails_found+''],['Cuối',site.last_crawled_at?new Date(site.last_crawled_at).toLocaleDateString('vi'):'—']].map(([l,v])=>(
-                      <div key={l} style={{fontSize:10}}><span style={{color:D.t3}}>{l} </span><span style={{fontWeight:500}}>{v}</span></div>
+              <div key={preset.d} style={{ ...S.card(), display: 'flex', alignItems: 'center', gap: 10, borderColor: running ? `rgba(37,99,235,.4)` : C.bd, background: running ? `linear-gradient(135deg,${C.b1} 0%,#0f1825 100%)` : C.b1 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: C.b3, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>{preset.i}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 500, fontSize: 12, marginBottom: 2 }}>{preset.n}</div>
+                  <div style={{ fontSize: 10, color: C.t3, fontFamily: "'JetBrains Mono',monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preset.d}</div>
+                  {site && <div style={{ display: 'flex', gap: 14, marginTop: 4 }}>
+                    {[['Quét', `${site.total_pages_crawled} trang`], ['Email', `${site.total_emails_found}`], ['Cuối', site.last_crawled_at ? new Date(site.last_crawled_at).toLocaleDateString('vi') : '—']].map(([l, v]) => (
+                      <span key={l} style={{ fontSize: 10 }}><span style={{ color: C.t3 }}>{l} </span><span style={{ fontWeight: 500 }}>{v}</span></span>
                     ))}
                   </div>}
                 </div>
-                {site ? (
-                  <button style={css.btn('p')} onClick={()=>crawlSite(site)} disabled={running||busy}>
-                    {running?'⏳ Quét...':'🔄 Quét mới'}
-                  </button>
-                ) : (
-                  <span style={{fontSize:10,color:D.t3}}>Chưa add</span>
-                )}
+                {site
+                  ? <button style={S.btn('p')} onClick={() => crawlSite(site)} disabled={running || busy}>{running ? '⏳ Quét...' : '🔄 Quét mới'}</button>
+                  : <span style={{ fontSize: 10, color: C.t3 }}>Chưa add</span>
+                }
               </div>
             )
           })}
-          {crawlLog.length>0 && <LogPane logs={crawlLog} pct={cp}/>}
+          {crawlLog.length > 0 && <LogPane logs={crawlLog} pct={cp} />}
         </>}
 
         {/* HUNTER */}
-        {tab==='hunter' && <>
-          <SectionCard accent='#0a1525'>
-            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
-              <span style={{fontWeight:500,fontSize:13}}>Hunter.io Domain Search</span>
-              <span style={{...css.bdg(D.pdim,D.purple)}}>API Key ✓</span>
+        {tab === 'hunter' && <>
+          <div style={{ ...S.card(), background: `linear-gradient(135deg,${C.b1} 0%,#0f1825 100%)`, border: `1px solid ${C.blueDim}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <span style={{ fontWeight: 600, fontSize: 13, fontFamily: "'Space Grotesk',sans-serif" }}>Hunter.io Domain Search</span>
+              <span style={S.bdg(C.purpleDim, C.purple)}>API Key ✓</span>
             </div>
-            <p style={{fontSize:11,color:'#6060b0',marginBottom:10,lineHeight:1.6}}>Tìm email BOD (CEO, CFO, CMO, CTO, Founder) kèm tên thật + chức danh + % tin cậy. Mỗi dòng 1 domain.</p>
-            <textarea value={hunterDoms} onChange={e=>setHunterDoms(e.target.value)} placeholder={'blockchainreporter.net\ncaptainaltcoin.com\ncoindoo.com'} style={{...css.inp,minHeight:90,resize:'vertical',marginBottom:8}}/>
-            <div style={{display:'flex',gap:8}}>
-              <select value={hunterMode} onChange={e=>setHunterMode(e.target.value)} style={{...css.inp,flex:1}}>
+            <p style={{ fontSize: 11, color: C.t3, marginBottom: 10, lineHeight: 1.6 }}>Tìm email BOD (CEO, CFO, CMO, CTO, Founder) kèm tên thật + chức danh + % tin cậy.</p>
+            <textarea value={hunterDoms} onChange={e => setHunterDoms(e.target.value)} placeholder={'blockchainreporter.net\ncaptainaltcoin.com\ncoindoo.com'} style={{ ...S.inp, minHeight: 90, resize: 'vertical', marginBottom: 8 }} />
+            <div style={S.row}>
+              <select value={hunterMode} onChange={e => setHunterMode(e.target.value)} style={{ ...S.inp, flex: 1 }}>
                 <option value="bod">Chỉ BOD — CEO, CFO, CMO, CTO, Founder, Director</option>
                 <option value="all">Tất cả email</option>
               </select>
-              <button style={css.btn('p')} onClick={doHunter} disabled={busy}>🎯 Tìm ngay</button>
-            </div>
-          </SectionCard>
-          {hunterLog.length>0 && <LogPane logs={hunterLog} pct={hp}/>}
-        </>}
-
-        {/* LIST */}
-        {tab==='list' && <>
-          <StatGrid items={[['Tổng',emails.length],['Chưa gửi',unsentCount,D.amber],['Đã gửi',sentCount,D.green],['BOD 👑',bodCount,D.purple]]}/>
-          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,marginBottom:10,flexWrap:'wrap'}}>
-            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Tìm email..." style={{...css.inp,width:150}}/>
-              <select value={fSt} onChange={e=>setFSt(e.target.value)} style={{...css.inp,width:105}}>
-                <option value="all">Tất cả</option><option value="new">Chưa gửi</option><option value="sent">Đã gửi</option><option value="failed">Lỗi</option>
-              </select>
-              <select value={fSrc} onChange={e=>setFSrc(e.target.value)} style={{...css.inp,width:120}}>
-                <option value="all">Mọi nguồn</option><option value="hunter_bod">BOD 👑</option><option value="hunter">Hunter</option><option value="article">Bài viết</option><option value="manual">Thủ công</option>
-              </select>
-            </div>
-            <div style={{display:'flex',gap:6}}>
-              <button style={css.btn()} onClick={()=>setSel(sel.size===emails.length?new Set():new Set(emails.map(e=>e.id)))}>Chọn tất</button>
-              <button style={{...css.btn(),color:D.red,borderColor:D.rdim}} onClick={async()=>{if(!sel.size)return;if(!confirm(`Xoá ${sel.size}?`))return;await fetch('/api/emails',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:[...sel]})});setSel(new Set());loadEmails()}}>🗑 Xoá</button>
-              <button style={css.btn()} onClick={()=>{const rows=['email,domain,source,name,position,status',...emails.map(e=>`"${e.address}","${e.domain||''}","${e.source_type||''}","${e.contact_name||''}","${e.position||''}","${e.status}"`)];const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([rows.join('\n')],{type:'text/csv'}));a.download='emails.csv';a.click()}}>⬇ CSV</button>
+              <button style={S.btn('p')} onClick={doHunter} disabled={busy}>🎯 Tìm ngay</button>
             </div>
           </div>
-          <div style={{background:D.b1,border:`1px solid ${D.bd}`,borderRadius:10,overflow:'hidden'}}>
-            {filtered.length===0
-              ? <div style={{padding:28,textAlign:'center',color:D.t3,fontSize:12}}>Không có email</div>
-              : filtered.map(e=>(
-                <div key={e.id} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 14px',borderBottom:`1px solid ${D.bd}`,fontSize:12,background:e.status==='sent'?'#060f05':D.b1}}>
-                  <input type="checkbox" checked={sel.has(e.id)} onChange={ev=>{const s=new Set(sel);ev.target.checked?s.add(e.id):s.delete(e.id);setSel(s)}}/>
-                  <span style={{flex:1,fontFamily:'monospace',fontSize:11,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',color:D.t1}}>{e.address}</span>
-                  {e.contact_name&&<span style={{fontSize:10,color:D.t2,whiteSpace:'nowrap'}}>{e.contact_name}</span>}
-                  {e.position&&<span style={{fontSize:10,color:D.t3,maxWidth:90,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{e.position}</span>}
-                  <span style={srcBg(e.source_type)}>{srcLabel(e.source_type)}</span>
-                  <span style={stBg(e.status)}>{e.status==='sent'?'✓ Đã gửi':e.status==='failed'?'Lỗi':'Mới'}</span>
+          {hunterLog.length > 0 && <LogPane logs={hunterLog} pct={hp} />}
+        </>}
+
+        {/* REMIND */}
+        {tab === 'remind' && <>
+          <div style={{ ...S.card(), background: `linear-gradient(135deg,${C.b1} 0%,#061520 100%)`, border: `1px solid rgba(0,212,255,.25)`, marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+              <span style={{ color: C.cyan }}>⏰</span>
+              <span style={{ fontWeight: 600, fontSize: 13, fontFamily: "'Space Grotesk',sans-serif", color: C.cyan }}>Auto-remind — 3 lần/tháng</span>
+            </div>
+            <p style={{ fontSize: 11, color: C.cyanMid, lineHeight: 1.6 }}>Ngày 0 → 10 → 20. Sau 3 lần không reply → Cold. Cron chạy 8h sáng tự động.</p>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <button style={S.btn('p')} onClick={runAutoRemind} disabled={busy}>▶ Chạy auto-remind</button>
+              <button style={S.btn()} onClick={() => setContacts(DEMO_CONTACTS.map(d => ({ ...d, id: uid() })))}>✨ Demo data</button>
+            </div>
+          </div>
+
+          {contacts.filter(needsRemind).length === 0
+            ? <div style={{ textAlign: 'center', padding: 24, color: C.t3, fontSize: 12 }}>✓ Tất cả đã được chăm sóc</div>
+            : contacts.filter(needsRemind).sort((a, b) => daysSince(b.lastSent) - daysSince(a.lastSent)).map(c => {
+              const days = daysSince(c.lastSent), fn = c.seq + 1
+              const subj = [``, `Quick follow-up — ${c.project} & Coincu`, `Last follow-up — ${c.project}`][fn] || `Follow-up — ${c.project}`
+              const [bg, col] = SC[c.stage] || SC.new
+              const isUrgent = days >= 20
+              return (
+                <div key={c.id} style={{ background: isUrgent ? `linear-gradient(135deg,${C.b1} 0%,rgba(58,5,5,.3) 100%)` : C.b1, border: `1px solid ${isUrgent ? `rgba(239,68,68,.4)` : days >= 10 ? `rgba(245,158,11,.35)` : C.bd}`, borderRadius: 10, padding: '11px 14px', marginBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, fontFamily: "'Space Grotesk',sans-serif" }}>{c.project}</span>
+                        <span style={S.bdg(bg, col)}>{SL[c.stage]}</span>
+                        {c.opened && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, padding: '2px 7px', borderRadius: 20, background: `rgba(0,212,255,.1)`, color: C.cyan, border: `1px solid rgba(0,212,255,.2)`, fontWeight: 500 }}>👁 Opened</span>}
+                        {fn === 3 && <span style={S.bdg(C.redDim, C.red)}>Lần cuối</span>}
+                      </div>
+                      <div style={{ fontSize: 10, color: C.t3, fontFamily: "'JetBrains Mono',monospace" }}>{c.email}</div>
+                      <div style={{ fontSize: 11, color: C.t2, marginTop: 3 }}>Follow-up #{fn} · {days} ngày trước · "{subj}"</div>
+                    </div>
+                    <button style={isUrgent ? S.btn('p') : S.btn('sm')} onClick={() => {
+                      setContacts(prev => prev.map(x => x.id === c.id ? { ...x, seq: x.seq + 1, lastSent: new Date().toLocaleDateString('vi-VN'), stage: x.seq + 1 >= 3 ? 'cold' : x.stage === 'new' ? 'contacted' : x.stage } : x))
+                      addTgMsg(`⏰ Follow-up #${c.seq + 1} → ${c.project}`)
+                    }}>✉️ {isUrgent ? 'Gửi ngay!' : 'Gửi'}</button>
+                  </div>
                 </div>
-              ))
+              )
+            })
+          }
+          {remindLog.length > 0 && <LogPane logs={remindLog} pct={rp} color={C.cyan} />}
+        </>}
+
+        {/* PIPELINE */}
+        {tab === 'pipeline' && <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 8, marginBottom: 12 }}>
+            {(['new', 'contacted', 'interested', 'negotiating', 'closed'] as const).map(s => {
+              const [, col] = SC[s]
+              return <StatBox key={s} label={SL[s]} value={contacts.filter(c => c.stage === s).length} color={col} />
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+            {(['new', 'contacted', 'interested', 'negotiating', 'closed'] as const).map(s => {
+              const items = contacts.filter(c => c.stage === s)
+              const [bg, col] = SC[s]
+              return (
+                <div key={s} style={{ flex: 1, minWidth: 120 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, padding: '6px 10px', borderRadius: '8px 8px 0 0', textAlign: 'center', marginBottom: 6, background: bg, color: col, fontFamily: "'Space Grotesk',sans-serif" }}>{SL[s]} ({items.length})</div>
+                  {items.length ? items.map(c => (
+                    <div key={c.id} style={{ background: C.b2, border: `1px solid ${C.bd}`, borderRadius: 8, padding: '8px 10px', marginBottom: 5, cursor: 'pointer', transition: 'border-color .15s' }}
+                      onClick={() => setContacts(prev => prev.map(x => x.id === c.id ? { ...x, stage: STAGES[(STAGES.indexOf(x.stage) + 1) % STAGES.length] } : x))}>
+                      <div style={{ fontWeight: 500, fontSize: 12, marginBottom: 2 }}>{c.project}</div>
+                      <div style={{ fontSize: 10, color: C.t3, fontFamily: "'JetBrains Mono',monospace" }}>{c.email.split('@')[0]}@...</div>
+                      {c.opened && <span style={{ fontSize: 10, color: C.cyan }}>opened</span>}
+                    </div>
+                  )) : <div style={{ padding: 8, textAlign: 'center', fontSize: 10, color: C.t3 }}>—</div>}
+                </div>
+              )
+            })}
+          </div>
+        </>}
+
+        {/* CONTACTS */}
+        {tab === 'contacts' && <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <input value={cSearch} onChange={e => setCSearch(e.target.value)} placeholder="Tìm contact..." style={{ ...S.inp, width: 155 }} />
+              <select value={cStage} onChange={e => setCStage(e.target.value)} style={{ ...S.inp, width: 120 }}>
+                <option value="all">Tất cả stage</option>
+                {STAGES.map(s => <option key={s} value={s}>{SL[s]}</option>)}
+              </select>
+              <select value={cOp} onChange={e => setCOp(e.target.value)} style={{ ...S.inp, width: 115 }}>
+                <option value="all">Mọi trạng thái</option>
+                <option value="opened">Opened</option>
+                <option value="not_opened">Chưa mở</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 5 }}>
+              <button style={S.btn('sm')} onClick={() => setContacts(DEMO_CONTACTS.map(d => ({ ...d, id: uid() })))}>✨ Demo</button>
+              <button style={S.btn('sm')} onClick={() => {
+                if (!contacts.length) return
+                const rows = ['email,project,stage,seq,opened,note', ...contacts.map(c => `"${c.email}","${c.project}","${c.stage}","${c.seq}","${c.opened}","${c.note}"`)]
+                const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([rows.join('\n')], { type: 'text/csv' })); a.download = 'contacts.csv'; a.click()
+              }}>⬇ CSV</button>
+            </div>
+          </div>
+          <div style={{ background: C.b1, border: `1px solid ${C.bd}`, borderRadius: 10, overflow: 'hidden' }}>
+            {filteredContacts.length === 0
+              ? <div style={{ padding: 24, textAlign: 'center', color: C.t3, fontSize: 12 }}>Không có kết quả — nhấn Demo để thêm dữ liệu mẫu</div>
+              : filteredContacts.map((c, i) => {
+                const [bg, col] = SC[c.stage] || SC.new
+                const [ab, ac] = AV_COLORS[i % 6]
+                return (
+                  <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderBottom: `1px solid ${C.bd}`, transition: 'background .15s' }}>
+                    <div style={{ width: 26, height: 26, borderRadius: '50%', background: ab, color: ac, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 600, flexShrink: 0 }}>{c.project.slice(0, 2).toUpperCase()}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 500, fontSize: 12 }}>{c.project}</div>
+                      <div style={{ fontSize: 11, color: C.t3, fontFamily: "'JetBrains Mono',monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.email}</div>
+                    </div>
+                    <span style={S.bdg(bg, col)}>{SL[c.stage]}</span>
+                    {c.opened && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, padding: '2px 7px', borderRadius: 20, background: `rgba(0,212,255,.1)`, color: C.cyan, border: `1px solid rgba(0,212,255,.2)`, fontWeight: 500 }}>👁</span>}
+                    {needsRemind(c) && <span style={S.bdg(C.redDim, C.red)}>🔔</span>}
+                    <span style={{ fontSize: 10, color: C.t3 }}>seq {c.seq}/3</span>
+                    <button style={S.btn('sm')} onClick={() => setContacts(prev => prev.map(x => x.id === c.id ? { ...x, stage: STAGES[(STAGES.indexOf(x.stage) + 1) % STAGES.length] } : x))}>→</button>
+                  </div>
+                )
+              })
             }
           </div>
         </>}
 
         {/* SEND */}
-        {tab==='send' && <>
-          <div style={{...css.card(),background:D.b2,border:'none',fontSize:12,marginBottom:10}}>
-            <strong style={{color:D.t1}}>{unsentCount}</strong><span style={{color:D.t2}}> email chưa gửi · </span>
-            <strong style={{color:D.t1}}>{sentCount}</strong><span style={{color:D.green}}> đã gửi sẽ tự bỏ qua</span>
+        {tab === 'send' && <>
+          <div style={{ ...S.card(), background: C.b2, border: 'none', fontSize: 12, marginBottom: 10 }}>
+            <span style={{ color: C.amber, fontWeight: 600 }}>{unsentCount}</span>
+            <span style={{ color: C.t2 }}> email chưa gửi · </span>
+            <span style={{ color: C.green, fontWeight: 600 }}>{sentCount}</span>
+            <span style={{ color: C.t2 }}> đã gửi sẽ tự bỏ qua</span>
           </div>
-          <SectionCard>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-              <div><label style={{fontSize:11,color:D.t2,display:'block',marginBottom:4}}>Tên người gửi</label><input value={fromName} onChange={e=>setFromName(e.target.value)} placeholder="LEON (Mr.)" style={css.inp}/></div>
-              <div><label style={{fontSize:11,color:D.t2,display:'block',marginBottom:4}}>Email người gửi</label><input value={fromEmail} onChange={e=>setFromEmail(e.target.value)} type="email" style={css.inp}/></div>
+          <div style={{ ...S.card(), background: `linear-gradient(135deg,${C.b1} 0%,#0f1825 100%)`, border: `1px solid ${C.blueDim}` }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+              <div><label style={{ fontSize: 11, color: C.t2, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>Tên người gửi</label><input value={fromName} onChange={e => setFromName(e.target.value)} style={S.inp} /></div>
+              <div><label style={{ fontSize: 11, color: C.t2, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>Email người gửi</label><input value={fromEmail} onChange={e => setFromEmail(e.target.value)} type="email" style={S.inp} /></div>
             </div>
-            <div style={{marginBottom:8}}><label style={{fontSize:11,color:D.t2,display:'block',marginBottom:4}}>Subject — dùng {'{{project}}'}</label><input value={subject} onChange={e=>setSubject(e.target.value)} style={css.inp}/></div>
-            <div style={{marginBottom:12}}><label style={{fontSize:11,color:D.t2,display:'block',marginBottom:4}}>Nội dung — {'{{email}}'} {'{{domain}}'} {'{{name}}'} {'{{project}}'}</label>
-              <textarea value={body} onChange={e=>setBody(e.target.value)} style={{...css.inp,minHeight:150,resize:'vertical'}}/>
+            <div style={{ marginBottom: 8 }}><label style={{ fontSize: 11, color: C.t2, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>Subject — dùng {'{{project}}'}</label><input value={subject} onChange={e => setSubject(e.target.value)} style={S.inp} /></div>
+            <div style={{ marginBottom: 12 }}><label style={{ fontSize: 11, color: C.t2, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>Nội dung — {'{{email}}'} {'{{domain}}'} {'{{name}}'} {'{{project}}'}</label>
+              <textarea value={body} onChange={e => setBody(e.target.value)} style={{ ...S.inp, minHeight: 150, resize: 'vertical' }} />
             </div>
-            <div style={{display:'flex',gap:8}}>
-              <button style={css.btn()} onClick={()=>{const s=emails.find(e=>e.status==='new');setPreview(`Từ: ${fromName} <${fromEmail}>\nSubject: ${subject.replace(/\{\{project\}\}/g,s?.contact_name||'Project')}\n\n${body.replace(/\{\{email\}\}/g,s?.address||'').replace(/\{\{domain\}\}/g,s?.domain||'').replace(/\{\{name\}\}/g,s?.contact_name||'Team').replace(/\{\{project\}\}/g,s?.contact_name||'Project')}`)}}>👁 Xem trước</button>
-              <button style={css.btn('p')} onClick={doSend} disabled={busy||unsentCount===0}>{busy?'⏳ Đang gửi...':`✉️ Gửi ${unsentCount} email`}</button>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button style={S.btn()} onClick={() => {
+                const s = emails.find(e => e.status === 'new')
+                setPreview(`Từ: ${fromName} <${fromEmail}>\nSubject: ${subject.replace(/\{\{project\}\}/g, s?.contact_name || 'Project')}\n\n${body.replace(/\{\{email\}\}/g, s?.address || '').replace(/\{\{domain\}\}/g, s?.domain || '').replace(/\{\{project\}\}/g, s?.contact_name || 'Project').replace(/\{\{name\}\}/g, s?.contact_name || 'Team')}`)
+              }}>👁 Xem trước</button>
+              <button style={{ ...S.btn('p'), ...{ fontSize: 13, padding: '11px 20px' } }} onClick={doSend} disabled={busy || unsentCount === 0}>{busy ? '⏳ Đang gửi...' : `✉️ Gửi ${unsentCount} email`}</button>
             </div>
-            {preview&&<pre style={{marginTop:10,fontSize:11,fontFamily:'monospace',whiteSpace:'pre-wrap',background:D.b2,padding:12,borderRadius:8,color:D.t2,lineHeight:1.7}}>{preview}</pre>}
-          </SectionCard>
-          {sendLog.length>0&&<LogPane logs={sendLog} pct={sp}/>}
+            {preview && <pre style={{ marginTop: 10, fontSize: 11, fontFamily: "'JetBrains Mono',monospace", whiteSpace: 'pre-wrap', background: C.b0, padding: 12, borderRadius: 8, color: C.t2, lineHeight: 1.7, border: `1px solid ${C.bd}` }}>{preview}</pre>}
+          </div>
+          {sendLog.length > 0 && <div style={S.card()}><ProgBar pct={sp} color={C.green} /><div style={S.logBox}>{sendLog.map((l, i) => <div key={i} style={{ color: lc(l.t) }}>{l.msg}</div>)}</div>
+            {sendDone && <div style={{ marginTop: 8, padding: '10px 12px', background: `rgba(16,185,129,.08)`, border: `1px solid rgba(16,185,129,.2)`, borderRadius: 8, fontSize: 12, color: C.green }}>✅ Hoàn tất: <strong>{sendDone.ok}</strong> thành công · <strong>{sendDone.fail}</strong> thất bại · <strong>{sendDone.skip}</strong> bỏ qua</div>}
+          </div>}
         </>}
 
         {/* TRACKING */}
-        {tab==='tracking' && <>
-          <SectionCard accent={D.cdim}>
-            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:5}}>
-              <span style={{color:D.cyan,fontSize:15}}>👁</span>
-              <span style={{fontWeight:500,color:D.cyan,fontSize:13}}>Email open tracking — pixel 1×1</span>
-              <span style={{...css.bdg(D.cdim,D.cyan)}}>Live</span>
+        {tab === 'tracking' && <>
+          <div style={{ ...S.card(), background: `linear-gradient(135deg,${C.b1} 0%,#061520 100%)`, border: `1px solid rgba(0,212,255,.25)` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+              <span style={{ color: C.cyan }}>👁</span>
+              <span style={{ fontWeight: 600, fontSize: 13, fontFamily: "'Space Grotesk',sans-serif", color: C.cyan }}>Email open tracking — pixel 1×1</span>
+              <span style={S.bdg(`rgba(0,212,255,.08)`, C.cyan)}>Live</span>
             </div>
-            <p style={{fontSize:11,color:'#3a8a9a',lineHeight:1.6}}>Mỗi email gửi ra tự nhúng pixel tracking ẩn. Khi contact mở → ghi Supabase + ping Telegram ngay trong vòng vài giây.</p>
-            <code style={{display:'block',marginTop:8,background:'#020d14',border:`1px solid ${D.cdim}`,borderRadius:6,padding:'6px 10px',fontSize:11,color:D.t2}}>
+            <p style={{ fontSize: 11, color: C.cyanMid, lineHeight: 1.6, marginBottom: 8 }}>Khi contact mở email → ghi Supabase + ping Telegram ngay. Follow up trong 1 tiếng tăng reply rate 3x.</p>
+            <code style={{ display: 'block', background: '#03060d', border: `1px solid ${C.cyanDim}`, borderRadius: 6, padding: '6px 10px', fontSize: 11, color: C.t2, fontFamily: "'JetBrains Mono',monospace" }}>
               {`<img src="/api/track-open?id={{email_id}}" width="1" height="1" style="display:none" />`}
             </code>
-          </SectionCard>
-          <StatGrid items={[['Đã mở email',openCount,D.cyan],['Open rate',emails.length>0?`${Math.round(openCount/emails.length*100)}%`:'0%',D.green],['Chưa mở',Math.max(0,sentCount-openCount),D.t3]]}/>
-          <div style={{background:D.b1,border:`1px solid ${D.bd}`,borderRadius:10,overflow:'hidden'}}>
-            {openEvents.length===0
-              ? <div style={{padding:28,textAlign:'center',color:D.t3,fontSize:12}}>👁 Chưa có tracking event nào — events sẽ hiện ở đây khi contact mở email</div>
-              : openEvents.map((ev,i)=>(
-                <div key={i} style={{display:'flex',alignItems:'center',gap:8,padding:'9px 14px',borderBottom:`1px solid ${D.bd}`,fontSize:12}}>
-                  <span style={{fontSize:16}}>👁</span>
-                  <div style={{flex:1}}>
-                    <div style={{fontWeight:500}}>{ev.project}</div>
-                    <div style={{fontSize:10,color:D.t3,fontFamily:'monospace'}}>{ev.email}</div>
+            <button style={{ ...S.btn('sm'), ...{ background: C.cyanDim, border: `1px solid rgba(0,212,255,.3)`, color: C.cyan, marginTop: 10 } }} onClick={simulateOpen}>▶ Giả lập mở email</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 10 }}>
+            <StatBox label="Opened" value={openEvents.length} color={C.cyan} />
+            <StatBox label="Open rate" value={sentCount > 0 ? `${Math.round(openEvents.length / sentCount * 100)}%` : '0%'} color={C.green} />
+            <StatBox label="Chưa mở" value={Math.max(0, sentCount - openEvents.length)} />
+          </div>
+          <div style={{ background: C.b1, border: `1px solid ${C.bd}`, borderRadius: 10, overflow: 'hidden' }}>
+            {openEvents.length === 0
+              ? <div style={{ padding: 20, textAlign: 'center', color: C.t3, fontSize: 12 }}>Nhấn "Giả lập mở email" để xem event</div>
+              : openEvents.map((ev, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderBottom: `1px solid ${C.bd}` }}>
+                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: `rgba(0,212,255,.15)`, color: C.cyan, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, flexShrink: 0 }}>👁</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 500, fontSize: 12 }}>{ev.contact} <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, padding: '2px 7px', borderRadius: 20, background: `rgba(0,212,255,.1)`, color: C.cyan, border: `1px solid rgba(0,212,255,.2)`, fontWeight: 500 }}>👁 opened</span></div>
+                    <div style={{ fontSize: 10, color: C.t3, fontFamily: "'JetBrains Mono',monospace" }}>{ev.email}</div>
                   </div>
-                  <span style={{...css.bdg(D.gdim,D.green)}}>Opened</span>
-                  <span style={{fontSize:10,color:D.t3}}>{ev.time}</span>
+                  <span style={{ fontSize: 10, color: C.t3, fontFamily: "'JetBrains Mono',monospace" }}>{ev.time}</span>
                 </div>
               ))
             }
@@ -459,66 +735,50 @@ export default function Page() {
         </>}
 
         {/* TELEGRAM */}
-        {tab==='telegram' && <>
-          <SectionCard accent={D.cdim}>
-            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:5}}>
-              <span style={{color:D.cyan,fontSize:15}}>📱</span>
-              <span style={{fontWeight:500,color:D.cyan,fontSize:13}}>Telegram bot notifications</span>
-              <span style={{...css.bdg(tgStatus==='ok'?D.gdim:tgStatus==='err'?D.rdim:D.adim,tgStatus==='ok'?D.green:tgStatus==='err'?D.red:D.amber)}}>{tgStatus==='ok'?'Đã kết nối':tgStatus==='err'?'Lỗi':'Chưa cấu hình'}</span>
+        {tab === 'telegram' && <>
+          <div style={{ ...S.card(), background: `linear-gradient(135deg,${C.b1} 0%,#061520 100%)`, border: `1px solid rgba(0,212,255,.25)` }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+              <span style={{ color: C.cyan }}>📱</span>
+              <span style={{ fontWeight: 600, fontSize: 13, fontFamily: "'Space Grotesk',sans-serif", color: C.cyan }}>Telegram bot notifications</span>
+              <span style={S.bdg(tgOk === true ? C.greenDim : tgOk === false ? C.redDim : C.amberDim, tgOk === true ? C.green : tgOk === false ? C.red : C.amber)}>{tgOk === true ? 'Đã kết nối' : tgOk === false ? 'Lỗi kết nối' : 'Chưa cấu hình'}</span>
             </div>
-            <p style={{fontSize:11,color:'#3a8a9a',lineHeight:1.6,marginBottom:10}}>Tự động ping khi: contact mở email, có reply, gửi xong batch, auto-remind xong.</p>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-              <div><label style={{fontSize:11,color:D.t2,display:'block',marginBottom:4}}>Bot Token</label><input value={tgToken} onChange={e=>setTgToken(e.target.value)} placeholder="110201543:AAHdqTcvCH1..." type="password" style={css.inp}/></div>
-              <div><label style={{fontSize:11,color:D.t2,display:'block',marginBottom:4}}>Chat ID</label><input value={tgChat} onChange={e=>setTgChat(e.target.value)} placeholder="123456789" style={css.inp}/></div>
+            <p style={{ fontSize: 11, color: C.cyanMid, lineHeight: 1.6, marginBottom: 10 }}>Ping khi: contact mở email · có reply · gửi xong batch · auto-remind xong</p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+              <div><label style={{ fontSize: 11, color: C.t2, display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em' }}>Bot Token</label><input value={tgToken} onChange={e => setTgToken(e.target.value)} type="password" placeholder="110201543:AAHdq..." style={S.inp} /></div>
+              <div><label style={{ fontSize: 11, color: C.t2, display: 'block', marginBottom: 4, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em' }}>Chat ID</label><input value={tgChat} onChange={e => setTgChat(e.target.value)} placeholder="123456789" style={S.inp} /></div>
             </div>
-            <div style={{display:'flex',gap:8}}>
-              <button style={css.btn('tg')} onClick={testTelegram}>🔌 Test kết nối</button>
-              <button style={css.btn('p')} onClick={()=>alert('Thêm TELEGRAM_BOT_TOKEN và TELEGRAM_CHAT_ID vào Vercel Environment Variables')}>💾 Lưu vào Vercel</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button style={{ ...S.btn('tg') }} onClick={testTelegram}>🔌 Test kết nối</button>
+              <button style={S.btn('p')} onClick={() => alert('Thêm TELEGRAM_BOT_TOKEN và TELEGRAM_CHAT_ID vào Vercel Environment Variables')}>💾 Lưu</button>
+              <button style={S.btn()} onClick={() => addTgMsg(`🔥 TestProject đã reply!\n💬 "Interested! Send pricing?"\n⏰ ${new Date().toLocaleTimeString('vi-VN')}`)}>▶ Giả lập notify</button>
             </div>
-          </SectionCard>
-          <div style={{marginBottom:8,fontSize:11,fontWeight:500,color:D.t2,textTransform:'uppercase',letterSpacing:'.06em'}}>Lịch sử notifications</div>
-          <div style={{background:'#020d10',border:`1px solid ${D.cdim}`,borderRadius:10,padding:12,minHeight:80}}>
-            {tgMsgs.length===0
-              ? <div style={{textAlign:'center',padding:20,color:D.t3,fontSize:12}}>📱 Chưa có notification nào — test kết nối để bắt đầu</div>
-              : tgMsgs.map((m,i)=>(
-                <div key={i} style={{display:'flex',gap:8,marginBottom:10,alignItems:'flex-start'}}>
-                  <div style={{width:28,height:28,borderRadius:'50%',background:D.cdim,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,flexShrink:0}}>🤖</div>
+          </div>
+
+          <div style={{ fontSize: 10, fontWeight: 600, color: C.t3, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            Notification feed <div style={{ flex: 1, height: 1, background: C.bd }} />
+          </div>
+          <div style={{ background: '#02080e', border: `1px solid rgba(0,212,255,.15)`, borderRadius: 10, padding: 12, minHeight: 80 }}>
+            {tgMsgs.length === 0
+              ? <div style={{ textAlign: 'center', padding: 18, color: C.t3, fontSize: 12 }}>📱 Chưa có notification nào</div>
+              : tgMsgs.map((m, i) => (
+                <div key={i} style={{ display: 'flex', gap: 9, marginBottom: 10, alignItems: 'flex-start' }}>
+                  <div style={{ width: 30, height: 30, borderRadius: '50%', background: C.cyanDim, border: `1px solid rgba(0,212,255,.2)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0 }}>🤖</div>
                   <div>
-                    <div style={{background:D.b2,borderRadius:'0 8px 8px 8px',padding:'8px 10px',fontSize:12,lineHeight:1.6,whiteSpace:'pre-wrap'}}>{m.text}</div>
-                    <div style={{fontSize:10,color:D.t3,marginTop:3}}>{m.time}</div>
+                    <div style={{ background: C.b2, border: `1px solid ${C.bd}`, borderRadius: '0 10px 10px 10px', padding: '8px 11px', fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{m.text}</div>
+                    <div style={{ fontSize: 10, color: C.t3, marginTop: 3, fontFamily: "'JetBrains Mono',monospace" }}>{m.time}</div>
                   </div>
                 </div>
               ))
             }
           </div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginTop:10}}>
-            {[['👁 Email opened','Ping ngay khi contact mở email'],['💬 Contact replied','Ping khi có reply + nội dung'],['✉️ Batch sent','Summary sau khi gửi xong'],['⏰ Auto-remind','Summary cron 8h sáng hàng ngày']].map(([t,d])=>(
-              <div key={t as string} style={css.card()}>
-                <div style={{fontWeight:500,marginBottom:3,fontSize:12}}>{t}</div>
-                <div style={{fontSize:11,color:D.t3}}>{d}</div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 10 }}>
+            {[['👁 Email opened', 'Ping ngay khi contact mở', C.cyan], ['💬 Contact replied', 'Ping + nội dung reply', C.green], ['✉️ Batch sent', 'Summary sau khi gửi xong', C.blue], ['⏰ Auto-remind', 'Summary cron 8h sáng', C.amber]].map(([t, d, c]) => (
+              <div key={t as string} style={S.card()}>
+                <div style={{ fontWeight: 500, fontSize: 12, marginBottom: 3 }}><span style={{ color: c as string, marginRight: 4 }}>●</span>{t}</div>
+                <div style={{ fontSize: 11, color: C.t3 }}>{d}</div>
               </div>
             ))}
-          </div>
-        </>}
-
-        {/* FIND URL (hidden but keep for URL scraping) */}
-        {tab==='dash' && false && <>
-          <SectionCard>
-            <textarea value={urlInput} onChange={e=>setUrlInput(e.target.value)} placeholder={'https://company.vn\nhttps://startup.io'} style={{...css.inp,minHeight:90,resize:'vertical',marginBottom:8}}/>
-            <div style={{display:'flex',gap:8}}>
-              <select value={findMode} onChange={e=>setFindMode(e.target.value)} style={{...css.inp,flex:1}}>
-                <option value="contact">Contact / About</option>
-                <option value="pr">Press Release</option>
-              </select>
-              <button style={css.btn('p')} onClick={doFind} disabled={busy}>🔍 Tìm</button>
-            </div>
-          </SectionCard>
-          {findLog.length>0&&<LogPane logs={findLog} pct={fp}/>}
-          <div style={{...css.card(),background:D.b2}}>
-            <div style={{display:'flex',gap:8}}>
-              <input value={manual} onChange={e=>setManual(e.target.value)} placeholder="email@domain.com, nguon.com" style={{...css.inp,flex:1}} onKeyDown={e=>e.key==='Enter'&&doManual()}/>
-              <button style={css.btn()} onClick={doManual}>+ Thêm</button>
-            </div>
           </div>
         </>}
 
