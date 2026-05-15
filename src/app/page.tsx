@@ -183,6 +183,13 @@ export default function Page() {
   const [tgOk, setTgOk] = useState<boolean | null>(null)
   const [dups, setDups] = useState(0)
   const [skipped, setSkipped] = useState(0)
+  // Test email states
+  const [testTo, setTestTo] = useState('')
+  const [testSubject, setTestSubject] = useState('Boost [ProjectName] Visibility — Coincu PR & CMC Top News')
+  const [testBody, setTestBody] = useState(`Hi [ProjectName],\n\nI came across your recent press release and wanted to reach out about amplifying your project visibility further.\n\nAt Coincu, we offer:\n• Press Release Distribution\n• CoinMarketCap Top News Listing\n• Sponsored Articles\n• Organic Coverage\n\nWe have helped 200+ blockchain projects boost their reach.\n\nFeel free to message me on Telegram: https://t.me/iamleonnn\n\nBest,\nLEON (Mr.)\nChief Business Development Officer — Coincu\nE: leon@coincu.com`)
+  const [testStatus, setTestStatus] = useState<'idle'|'sending'|'ok'|'err'>('idle')
+  const [testMsg, setTestMsg] = useState('')
+  const [smtpOk, setSmtpOk] = useState<boolean|null>(null)
 
   const loadEmails = useCallback(async () => {
     try {
@@ -335,6 +342,29 @@ export default function Page() {
     } catch {}
   }
 
+  async function sendTestEmail() {
+    if (!testTo || !testSubject || !testBody) { alert('Điền đầy đủ email nhận, subject và nội dung!'); return }
+    setTestStatus('sending'); setTestMsg('')
+    try {
+      const r = await fetch('/api/test-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: testTo, subject: testSubject, body: testBody, fromName: 'LEON (Mr.) — Coincu', fromEmail: 'leon@coincu.com', isTest: true })
+      })
+      const d = await r.json()
+      if (d.success) { setTestStatus('ok'); setTestMsg(`✅ Đã gửi thành công đến ${testTo}! Kiểm tra hộp thư.`) }
+      else { setTestStatus('err'); setTestMsg(`✗ Lỗi: ${d.error || 'Không rõ'}`) }
+    } catch (e: any) { setTestStatus('err'); setTestMsg(`✗ ${e.message}`) }
+  }
+
+  async function checkSmtp() {
+    try {
+      const r = await fetch('/api/test-email')
+      const d = await r.json()
+      setSmtpOk(d.configured)
+    } catch { setSmtpOk(false) }
+  }
+
   async function simulateOpen() {
     const e = emails.find(x => x.status === 'sent') || emails[0]
     if (!e) return
@@ -369,7 +399,7 @@ export default function Page() {
   const TABS = [
     ['dash', '🏠 Dashboard'], ['sites', '🕷 Bài viết'], ['hunter', '🎯 Hunter BOD'],
     ['remind', '🔔 Remind'], ['pipeline', '📊 Pipeline'], ['contacts', '👥 Contacts'],
-    ['send', '✉️ Gửi'], ['tracking', '👁 Tracking'], ['telegram', '📱 Telegram'],
+    ['send', '✉️ Gửi'], ['testemail', '🧪 Test Email'], ['tracking', '👁 Tracking'], ['telegram', '📱 Telegram'],
   ] as const
 
   const hdrKpis = [
@@ -696,6 +726,68 @@ export default function Page() {
           {sendLog.length > 0 && <div style={S.card()}><ProgBar pct={sp} color={C.green} /><div style={S.logBox}>{sendLog.map((l, i) => <div key={i} style={{ color: lc(l.t) }}>{l.msg}</div>)}</div>
             {sendDone && <div style={{ marginTop: 8, padding: '10px 12px', background: `rgba(16,185,129,.08)`, border: `1px solid rgba(16,185,129,.2)`, borderRadius: 8, fontSize: 12, color: C.green }}>✅ Hoàn tất: <strong>{sendDone.ok}</strong> thành công · <strong>{sendDone.fail}</strong> thất bại · <strong>{sendDone.skip}</strong> bỏ qua</div>}
           </div>}
+        </>}
+
+        {/* TEST EMAIL */}
+        {tab === 'testemail' && <>
+          <div style={{ ...S.card(), background: `linear-gradient(135deg,${C.b1} 0%,#0a1a0a 100%)`, border: `1px solid rgba(16,185,129,.3)`, marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+              <span style={{ fontSize: 16 }}>🧪</span>
+              <span style={{ fontWeight: 600, fontSize: 13, fontFamily: "'Space Grotesk',sans-serif", color: C.green }}>Test gửi email thật</span>
+              <span style={S.bdg(`rgba(16,185,129,.12)`, C.green)}>SMTP Live</span>
+              {smtpOk === true && <span style={S.bdg(`rgba(16,185,129,.12)`, C.green)}>✓ SMTP OK</span>}
+              {smtpOk === false && <span style={S.bdg(C.redDim, C.red)}>✗ SMTP chưa cấu hình</span>}
+            </div>
+            <p style={{ fontSize: 11, color: '#4a9a4a', lineHeight: 1.6, marginBottom: 10 }}>Nhập email nhận để test — email sẽ được gửi thật với nội dung bên dưới. Subject có tiền tố [TEST] để phân biệt.</p>
+            <button style={{ ...S.btn('sm'), ...{ background: C.greenDim, border: `1px solid rgba(16,185,129,.3)`, color: C.green, marginBottom: 12 } }} onClick={checkSmtp}>🔌 Kiểm tra kết nối SMTP</button>
+          </div>
+
+          <div style={{ ...S.card(), border: `1px solid ${C.blueDim}` }}>
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ fontSize: 11, color: C.t2, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>📧 Email nhận (để test)</label>
+              <input
+                value={testTo}
+                onChange={e => setTestTo(e.target.value)}
+                type="email"
+                placeholder="nhap-email-cua-ban@gmail.com"
+                style={{ ...S.inp, border: `1px solid rgba(37,99,235,.4)` }}
+              />
+              <div style={{ fontSize: 10, color: C.t3, marginTop: 4 }}>Điền email của bạn để nhận email test trước khi gửi hàng loạt</div>
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <label style={{ fontSize: 11, color: C.t2, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>Subject</label>
+              <input value={testSubject} onChange={e => setTestSubject(e.target.value)} style={S.inp} />
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 11, color: C.t2, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>Nội dung email</label>
+              <textarea value={testBody} onChange={e => setTestBody(e.target.value)} style={{ ...S.inp, minHeight: 180, resize: 'vertical' as const }} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                style={{ ...S.btn('p'), ...{ fontSize: 13, padding: '11px 20px', background: C.green, opacity: testStatus === 'sending' ? 0.5 : 1 } }}
+                onClick={sendTestEmail}
+                disabled={testStatus === 'sending'}
+              >
+                {testStatus === 'sending' ? '⏳ Đang gửi...' : '📤 Gửi email test ngay'}
+              </button>
+              {testStatus === 'ok' && <span style={{ fontSize: 12, color: C.green }}>{testMsg}</span>}
+              {testStatus === 'err' && <span style={{ fontSize: 12, color: C.red }}>{testMsg}</span>}
+            </div>
+          </div>
+
+          <div style={S.card()}>
+            <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 8, color: C.t2 }}>💡 Hướng dẫn cấu hình SMTP để gửi email</div>
+            <div style={{ fontSize: 11, color: C.t3, lineHeight: 1.8 }}>
+              <div>1. Vào <strong style={{color:C.t1}}>Vercel → Settings → Environment Variables</strong></div>
+              <div>2. Thêm các biến sau:</div>
+              <pre style={{ background: C.b0, border: `1px solid ${C.bd}`, borderRadius: 6, padding: '8px 10px', marginTop: 6, fontSize: 11, fontFamily: "'JetBrains Mono',monospace", color: C.t2, lineHeight: 1.9 }}>{`SMTP_HOST     = smtp.gmail.com
+SMTP_PORT     = 587
+SMTP_USER     = leon@coincu.com  (hoặc gmail của bạn)
+SMTP_PASS     = xxxx xxxx xxxx xxxx  (Gmail App Password)`}</pre>
+              <div style={{ marginTop: 8, color: C.t3 }}>3. Gmail → <strong style={{color:C.t1}}>myaccount.google.com/apppasswords</strong> → tạo App Password (cần bật 2FA)</div>
+              <div style={{ marginTop: 4, color: C.t3 }}>4. Sau khi thêm env vars → Redeploy trên Vercel</div>
+            </div>
+          </div>
         </>}
 
         {/* TRACKING */}
