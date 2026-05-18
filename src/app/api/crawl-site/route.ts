@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase'
 
 const HUNTER_KEY = process.env.HUNTER_API_KEY
 
-// URL paths thật của từng site
+// URL paths thật của từng site - v1779090625
 const PR_PATHS: Record<string, string[]> = {
   'zycrypto.com':           ['/category/press-releases/', '/category/sponsored/'],
   'cryptotimes.io':         ['/category/press-release/', '/category/sponsored/'],
