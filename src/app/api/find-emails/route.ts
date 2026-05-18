@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     const domain = url.replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
     try {
       const msg = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-5',
         max_tokens: 300,
         messages: [{
           role: 'user',
