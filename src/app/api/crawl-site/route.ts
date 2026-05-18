@@ -19,7 +19,7 @@ function isBOD(t: string) { return BOD_TITLES.some(b => (t||'').toLowerCase().in
 async function fetchText(url: string): Promise<string> {
   const res = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://google.com/bot.html)' },
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(7000),
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const html = await res.text()
@@ -107,7 +107,7 @@ async function hunterBOD(domain: string): Promise<{ email: string; name: string;
 }
 
 export async function POST(req: NextRequest) {
-  const { siteUrl, maxPages = 6 } = await req.json()
+  const { siteUrl, maxPages = 3 } = await req.json()
   if (!siteUrl) return NextResponse.json({ error: 'Thiếu siteUrl' }, { status: 400 })
 
   const domain = siteUrl.replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
