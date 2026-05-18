@@ -560,18 +560,23 @@ export default function Page() {
               <span style={{ fontWeight: 600, fontSize: 13, fontFamily: "'Space Grotesk',sans-serif" }}>Hunter.io Domain Search</span>
               <span style={S.bdg(C.purpleDim, C.purple)}>BOD: CEO · CFO · CMO · CTO · Founder</span>
               <button style={{ ...S.btn('sm'), marginLeft: 'auto', fontSize: 11 }} onClick={async () => {
-                setHunterLog([])
-                addLog(setHunterLog, '▶ Đang kiểm tra Hunter.io API key...', 'info')
+                setHunterLog([{ msg: '▶ Đang kiểm tra...', t: 'info' }])
                 try {
                   const r = await fetch('/api/hunter')
                   const d = await r.json()
                   if (d.ok) {
-                    addLog(setHunterLog, `✓ Kết nối OK! Email: ${d.email} | Plan: ${d.plan}`, 'ok')
-                    addLog(setHunterLog, `  Requests còn lại: ${d.requests_remaining} | Đã dùng: ${d.requests_used}`, 'ok')
+                    setHunterLog([
+                      { msg: `✓ Kết nối OK!`, t: 'ok' },
+                      { msg: `  Email: ${d.email}`, t: 'ok' },
+                      { msg: `  Plan: ${d.plan}`, t: 'ok' },
+                      { msg: `  Requests còn lại: ${d.requests_remaining ?? '?'} | Đã dùng: ${d.requests_used ?? '?'}`, t: 'ok' },
+                    ])
                   } else {
-                    addLog(setHunterLog, `✗ Lỗi: ${d.error}`, 'err')
+                    setHunterLog([{ msg: `✗ ${d.error}`, t: 'err' }])
                   }
-                } catch (e: any) { addLog(setHunterLog, `✗ ${e.message}`, 'err') }
+                } catch (e: any) {
+                  setHunterLog([{ msg: `✗ Network error: ${e.message}`, t: 'err' }])
+                }
               }}>🔌 Test API key</button>
             </div>
             <p style={{ fontSize: 11, color: C.t3, marginBottom: 8, lineHeight: 1.6 }}>
