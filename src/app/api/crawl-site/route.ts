@@ -118,9 +118,12 @@ export async function GET(req: NextRequest) {
           while ((m = re.exec(html)) !== null) {
             let url = m[1]
             if (!url.startsWith('http')) url = `https://${domain}${url}`
-            // Lọc chỉ lấy link bài viết (không phải trang category/tag/page)
-            if (!url.match(/\/category\/|\/tag\/|\/author\/|\/page\/|\?/) &&
-                url.includes(domain) && url.length > `https://${domain}`.length + 5) {
+            // Chỉ lấy link bài viết thật (không phải assets, admin, feeds)
+            if (url.includes(domain) &&
+                !url.match(/\/category\/|\/tag\/|\/author\/|\/page\/|\/feed\/|\?|#/) &&
+                !url.match(/\.(png|jpg|jpeg|gif|svg|ico|css|js|xml|php|json|txt)(\?|$)/i) &&
+                !url.match(/\/(wp-content|wp-json|wp-admin|xmlrpc|comments\/feed)/) &&
+                url.length > `https://${domain}/`.length + 10) {
               allLinks.add(url)
             }
           }
