@@ -5,22 +5,26 @@ import { supabase } from '@/lib/supabase'
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const HUNTER_KEY = process.env.HUNTER_API_KEY
 
-// Pattern URL thật của từng site
-const SITE_PR_PATHS: Record<string, string> = {
-  'zycrypto.com': '/press-release/',
-  'cryptotimes.io': '/press-release/',
-  'blockchainreporter.net': '/press-release/',
-  'livebitcoinnews.com': '/press-releases/',
-  'tronweekly.com': '/press-release/',
-  'analyticsinsight.net': '/press-release-2025/',
-  'coindoo.com': '/press-release/',
-  'captainaltcoin.com': '/press-releases/',
-  'moneycheck.com': '/press-release/',
-  'optimisus.com': '/press-release/',
-  'timestabloid.com': '/press-release/',
-  'cryptobrowser.io': '/press-release/',
-  'coingabbar.com': '/press-releases/',
-  'theportugalnews.com': '/press-release/',
+// URL thật đã verify của từng site
+const SITE_PR_PATHS: Record<string, string[]> = {
+  'zycrypto.com':            ['/category/press-releases/', '/category/sponsored/'],
+  'cryptotimes.io':          ['/category/press-release/', '/category/sponsored/'],
+  'blockchainreporter.net':  ['/category/press-release/', '/press-release/'],
+  'livebitcoinnews.com':     ['/category/press-releases/', '/press-releases/'],
+  'tronweekly.com':          ['/category/press-release/', '/press-releases/'],
+  'analyticsinsight.net':    ['/category/press-release/', '/press-releases/'],
+  'coindoo.com':             ['/category/press-release/', '/press-releases/'],
+  'captainaltcoin.com':      ['/category/press-releases/'],
+  'moneycheck.com':          ['/category/press-release/', '/press-releases/'],
+  'optimisus.com':           ['/category/press-release/'],
+  'timestabloid.com':        ['/category/press-release/'],
+  'cryptobrowser.io':        ['/category/press-release/'],
+  'coingabbar.com':          ['/category/press-release/'],
+  'theportugalnews.com':     ['/category/press-release/'],
+  'globenewswire.com':       ['/en/search/keyword/crypto'],
+  'crypto.news':             ['/category/press-releases/', '/sponsored/'],
+  'coinmarketcap.com':       ['/community/articles/'],
+  'crunchbase.com':          ['/hub/cryptocurrency-companies'],
 }
 
 const CRYPTO_KW = ['blockchain','crypto','defi','nft','web3','token','coin','exchange',
@@ -33,32 +37,34 @@ const BOD_TITLES = ['CEO','Co-Founder','Founder','CFO','COO','CMO','CTO',
 function isCrypto(t: string) { return CRYPTO_KW.some(k => (t||'').toLowerCase().includes(k)) }
 function isBOD(t: string) { return BOD_TITLES.some(b => (t||'').toLowerCase().includes(b.toLowerCase())) }
 
-// Extract emails trực tiếp bằng regex từ HTML
-function extractEmailsRegex(html: string, excludeDomain: string): string[] {
-  const emailRegex = /[\w.+-]+@[\w-]+\.[\w.]{2,}/g
-  const found = html.match(emailRegex) || []
+function extractEmailsRegex(text: string, excludeDomain: string): string[] {
+  const emailRegex = /[\w.+%-]+@[\w-]+\.[\w.]{2,}/g
+  const found = text.match(emailRegex) || []
   return [...new Set(found.filter(e =>
     !e.includes(excludeDomain) &&
     !e.includes('example.com') &&
-    !e.includes('sentry.io') &&
-    !e.includes('wixpress.com') &&
-    !e.includes('.png') &&
-    !e.includes('.jpg') &&
-    e.length < 100
+    !e.includes('sentry') &&
+    !e.includes('wix') &&
+    !e.endsWith('.png') &&
+    !e.endsWith('.jpg') &&
+    e.length < 80 &&
+    e.includes('.')
   ))]
 }
 
-// Fetch URL với timeout ngắn
 async function quickFetch(url: string): Promise<string> {
   const res = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
-    signal: AbortSignal.timeout(6000),
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.5',
+    },
+    signal: AbortSignal.timeout(7000),
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return await res.text()
 }
 
-// Hunter BOD nhanh
 async function hunterBOD(domain: string): Promise<{ email: string; name: string; position: string }[]> {
   if (!HUNTER_KEY || !domain?.includes('.')) return []
   try {
@@ -79,42 +85,55 @@ async function hunterBOD(domain: string): Promise<{ email: string; name: string;
   } catch { return [] }
 }
 
-// GET action=urls: Lấy links bài PR từ trang index của site
+// GET action=urls: Fetch trang index thật để lấy link bài PR
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
-  const action = searchParams.get('action')
 
-  if (action === 'urls') {
+  if (searchParams.get('action') === 'urls') {
     const siteUrl = searchParams.get('siteUrl') || ''
     const domain = siteUrl.replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
-    const prPath = SITE_PR_PATHS[domain] || '/press-release/'
-    const indexUrl = `https://${domain}${prPath}`
+    const paths = SITE_PR_PATHS[domain] || ['/category/press-release/']
 
-    try {
-      const html = await quickFetch(indexUrl)
-      // Extract links bài viết từ HTML
-      const linkRegex = new RegExp(`href=["'](https?://${domain}${prPath}[^"'?#]+)["']`, 'gi')
-      const relRegex = new RegExp(`href=["'](${prPath}[^"'?#]+)["']`, 'gi')
-      const links = new Set<string>()
-      let m
-      while ((m = linkRegex.exec(html)) !== null) links.add(m[1])
-      while ((m = relRegex.exec(html)) !== null) links.add(`https://${domain}${m[1]}`)
+    // Load đã quét
+    const { data: site } = await supabase.from('competitor_sites').select('id').eq('domain', domain).single()
+    const { data: crawled } = site
+      ? await supabase.from('crawled_pages').select('page_url').eq('site_id', site.id)
+      : { data: [] }
+    const crawledSet = new Set((crawled||[]).map((r: any) => r.page_url))
 
-      // Load đã quét
-      const { data: site } = await supabase.from('competitor_sites').select('id').eq('domain', domain).single()
-      const { data: crawled } = site
-        ? await supabase.from('crawled_pages').select('page_url').eq('site_id', site.id)
-        : { data: [] }
-      const crawledSet = new Set((crawled||[]).map((r: any) => r.page_url))
+    const allLinks = new Set<string>()
+    const errors: string[] = []
 
-      const urls = [...links].filter(u => !crawledSet.has(u)).slice(0, 8)
-      return NextResponse.json({ urls, domain, indexUrl })
-    } catch (e: any) {
-      return NextResponse.json({ urls: [], domain, error: e.message })
+    for (const path of paths) {
+      const indexUrl = `https://${domain}${path}`
+      try {
+        const html = await quickFetch(indexUrl)
+        // Extract article links
+        const patterns = [
+          new RegExp(`href=["'](https?://(?:www\\.)?${domain.replace('.', '\\.')}[^"'?#]+)["']`, 'gi'),
+          new RegExp(`href=["'](/[^"'?#]{10,}/)["']`, 'gi'),
+        ]
+        for (const re of patterns) {
+          let m
+          while ((m = re.exec(html)) !== null) {
+            let url = m[1]
+            if (!url.startsWith('http')) url = `https://${domain}${url}`
+            // Lọc chỉ lấy link bài viết (không phải trang category/tag/page)
+            if (!url.match(/\/category\/|\/tag\/|\/author\/|\/page\/|\?/) &&
+                url.includes(domain) && url.length > `https://${domain}`.length + 5) {
+              allLinks.add(url)
+            }
+          }
+        }
+      } catch (e: any) {
+        errors.push(`${path}: ${e.message}`)
+      }
     }
+
+    const urls = [...allLinks].filter(u => !crawledSet.has(u)).slice(0, 10)
+    return NextResponse.json({ urls, domain, errors })
   }
 
-  // Default: danh sách sites
   const { data: sites } = await supabase
     .from('competitor_sites')
     .select('*, crawled_pages(count)')
@@ -122,12 +141,11 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ sites: sites||[] })
 }
 
-// POST mode 1: init site
-// POST mode 2: process 1 article
+// POST: init site hoặc process 1 article
 export async function POST(req: NextRequest) {
   const body = await req.json()
 
-  // Mode 1: Init site → trả về siteId
+  // Init site
   if (!body.articleUrl) {
     const { siteUrl } = body
     if (!siteUrl) return NextResponse.json({ error: 'Missing siteUrl' }, { status: 400 })
@@ -139,7 +157,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ siteId: site?.id, domain })
   }
 
-  // Mode 2: Process 1 article URL
+  // Process 1 article
   const { articleUrl, siteUrl, siteId } = body
   const hostDomain = (siteUrl||'').replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
 
@@ -153,87 +171,79 @@ export async function POST(req: NextRequest) {
   let skipped = false
 
   try {
-    // BƯỚC 1: Fetch HTML bài viết thật
     const html = await quickFetch(articleUrl)
-    logs.push(`✓ Fetched ${html.length} chars`)
-
-    // BƯỚC 2: Extract emails bằng regex (nhanh, không cần Claude)
-    const strippedText = html
+    const stripped = html
       .replace(/<script[\s\S]*?<\/script>/gi, '')
       .replace(/<style[\s\S]*?<\/style>/gi, '')
       .replace(/<[^>]+>/g, ' ')
-    const rawEmails = extractEmailsRegex(strippedText, hostDomain)
+      .replace(/\s+/g, ' ')
+    logs.push(`✓ Fetched ${stripped.length} chars`)
 
-    // BƯỚC 3: Dùng Claude classify — project name, domain, có crypto không
-    // (Chỉ cần 1 lần, nhẹ hơn)
-    if (rawEmails.length > 0 || strippedText.length > 500) {
-      const snippet = strippedText.replace(/\s+/g, ' ').slice(0, 5000)
-      const msg = await anthropic.messages.create({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 300,
-        messages: [{
-          role: 'user',
-          content: `From this press release on ${hostDomain}, identify:
-1. The ADVERTISER (crypto project that paid for this article)
-2. Their domain
-3. Is it a crypto project?
-Emails found by regex: ${rawEmails.join(', ')||'none'}
+    // Regex extract emails nhanh
+    const rawEmails = extractEmailsRegex(stripped, hostDomain)
+    logs.push(`  Regex found: ${rawEmails.length} emails ${rawEmails.slice(0,3).join(', ')}`)
 
-Snippet: ${snippet.slice(0,3000)}
+    // Claude classify (nhanh, chỉ cần snippet nhỏ)
+    const snippet = stripped.slice(0, 4000)
+    const msg = await anthropic.messages.create({
+      model: 'claude-sonnet-4-5',
+      max_tokens: 250,
+      messages: [{
+        role: 'user',
+        content: `PR article on ${hostDomain}. Find ADVERTISER (crypto project that booked this article).
+Emails found: ${rawEmails.join(', ')||'none'}
+Text: ${snippet}
+JSON: {"name":"X","domain":"x.io","isCrypto":true,"emails":["valid@x.io"]}`
+      }]
+    })
 
-Return JSON only:
-{"name":"ProjectName","domain":"project.io","isCrypto":true,"validEmails":["email@project.io"]}`
-        }]
-      })
-      const raw = msg.content[0].type === 'text' ? msg.content[0].text : '{}'
-      try {
-        const info = JSON.parse(raw.replace(/```json|```/g,'').trim())
-        advertiserName = info.name || ''
-        advertiserDomain = info.domain || ''
+    const raw = msg.content[0].type === 'text' ? msg.content[0].text : '{}'
+    const info = JSON.parse(raw.replace(/```json|```/g,'').trim().match(/\{[\s\S]*\}/)?.[0]||'{}')
+    advertiserName = info.name || ''
+    advertiserDomain = info.domain || ''
 
-        if (!info.isCrypto && !isCrypto(info.name + ' ' + info.domain)) {
-          logs.push(`⊘ Non-crypto`)
-          skipped = true
-        } else {
-          logs.push(`Dự án: ${info.name} (${info.domain})`)
-          // Dùng emails đã được validate bởi Claude
-          for (const em of (info.validEmails || rawEmails)) {
-            const a = em.toLowerCase().trim()
-            if (a.includes('@') && !a.includes(hostDomain) && !emailSet.has(a)) {
-              await supabase.from('emails').insert({
-                address: a, source_url: articleUrl,
-                domain: advertiserDomain||hostDomain, status: 'new',
-                source_type: 'article', contact_name: advertiserName||null
-              })
-              emailSet.add(a); saved.push(a)
-              logs.push(`→ [Bài] ${a}`)
-            }
-          }
+    if (info.isCrypto === false && !isCrypto(info.name + ' ' + info.domain + ' ' + snippet.slice(0,500))) {
+      logs.push(`⊘ Non-crypto`)
+      skipped = true
+    } else {
+      logs.push(`Dự án: ${info.name} (${info.domain})`)
+      const useEmails = info.emails?.length ? info.emails : rawEmails
+      for (const em of useEmails) {
+        const a = (em||'').toLowerCase().trim()
+        if (a.includes('@') && !a.includes(hostDomain) && !emailSet.has(a) && a.length < 80) {
+          await supabase.from('emails').insert({
+            address: a, source_url: articleUrl,
+            domain: advertiserDomain||hostDomain, status: 'new',
+            source_type: 'article', contact_name: advertiserName||null
+          })
+          emailSet.add(a); saved.push(a)
+          logs.push(`→ [Bài] ${a}`)
         }
-      } catch {}
+      }
     }
+  } catch (e: any) {
+    logs.push(`⚠ ${e.message}`)
+    skipped = saved.length === 0
+  }
 
-    // BƯỚC 4: Hunter BOD (song song nếu có domain)
-    if (!skipped && advertiserDomain && advertiserDomain !== hostDomain) {
+  // Hunter BOD
+  if (!skipped && advertiserDomain && advertiserDomain !== hostDomain) {
+    try {
       const hunterR = await hunterBOD(advertiserDomain)
       for (const h of hunterR) {
-        if (!emailSet.has(h.email)) {
+        if (h.email && !emailSet.has(h.email)) {
           await supabase.from('emails').insert({
             address: h.email, source_url: articleUrl,
             domain: advertiserDomain, status: 'new',
             source_type: 'hunter_bod', contact_name: h.name||null, position: h.position||null
           })
           emailSet.add(h.email); saved.push(h.email)
-          logs.push(`→ [Hunter${isBOD(h.position)?'BOD👑':''}] ${h.email} (${h.name})`)
+          logs.push(`→ [Hunter${isBOD(h.position)?'BOD👑':''}] ${h.email}`)
         }
       }
-    }
-  } catch (e: any) {
-    logs.push(`⚠ ${e.message}`)
-    skipped = true
+    } catch {}
   }
 
-  // Ghi nhận đã quét dù có email hay không
   await supabase.from('crawled_pages').insert({
     site_id: siteId, page_url: articleUrl,
     page_title: advertiserName||articleUrl, emails_found: saved.length
