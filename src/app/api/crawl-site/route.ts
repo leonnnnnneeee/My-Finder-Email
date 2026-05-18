@@ -201,7 +201,8 @@ JSON: {"name":"X","domain":"x.io","isCrypto":true,"emails":["valid@x.io"]}`
     })
 
     const raw = msg.content[0].type === 'text' ? msg.content[0].text : '{}'
-    const info = JSON.parse(raw.replace(/```json|```/g,'').trim().match(/\{[\s\S]*\}/)?.[0]||'{}')
+    const jsonMatch = raw.match(/\{[\s\S]*?\}/)
+    const info = jsonMatch ? JSON.parse(jsonMatch[0]) : {}
     advertiserName = info.name || ''
     advertiserDomain = info.domain || ''
 
