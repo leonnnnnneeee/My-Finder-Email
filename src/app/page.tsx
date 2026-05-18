@@ -556,19 +556,51 @@ export default function Page() {
         {/* HUNTER */}
         {tab === 'hunter' && <>
           <div style={{ ...S.card(), background: `linear-gradient(135deg,${C.b1} 0%,#0f1825 100%)`, border: `1px solid ${C.blueDim}` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
               <span style={{ fontWeight: 600, fontSize: 13, fontFamily: "'Space Grotesk',sans-serif" }}>Hunter.io Domain Search</span>
-              <span style={S.bdg(C.purpleDim, C.purple)}>API Key ✓</span>
+              <span style={S.bdg(C.purpleDim, C.purple)}>BOD: CEO · CFO · CMO · CTO · Founder</span>
+              <button style={{ ...S.btn('sm'), marginLeft: 'auto', fontSize: 11 }} onClick={async () => {
+                setHunterLog([])
+                addLog(setHunterLog, '▶ Đang kiểm tra Hunter.io API key...', 'info')
+                try {
+                  const r = await fetch('/api/hunter')
+                  const d = await r.json()
+                  if (d.ok) {
+                    addLog(setHunterLog, `✓ Kết nối OK! Email: ${d.email} | Plan: ${d.plan}`, 'ok')
+                    addLog(setHunterLog, `  Requests còn lại: ${d.requests_remaining} | Đã dùng: ${d.requests_used}`, 'ok')
+                  } else {
+                    addLog(setHunterLog, `✗ Lỗi: ${d.error}`, 'err')
+                  }
+                } catch (e: any) { addLog(setHunterLog, `✗ ${e.message}`, 'err') }
+              }}>🔌 Test API key</button>
             </div>
-            <p style={{ fontSize: 11, color: C.t3, marginBottom: 10, lineHeight: 1.6 }}>Tìm email BOD (CEO, CFO, CMO, CTO, Founder) kèm tên thật + chức danh + % tin cậy.</p>
-            <textarea value={hunterDoms} onChange={e => setHunterDoms(e.target.value)} placeholder={'blockchainreporter.net\ncaptainaltcoin.com\ncoindoo.com'} style={{ ...S.inp, minHeight: 90, resize: 'vertical', marginBottom: 8 }} />
+            <p style={{ fontSize: 11, color: C.t3, marginBottom: 8, lineHeight: 1.6 }}>
+              Nhập domain vào ô dưới (mỗi dòng 1) → Hunter.io tìm email BOD thật kèm tên + chức danh + % tin cậy.
+            </p>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+              <button style={S.btn('sm')} onClick={() => setHunterDoms(`blockchainreporter.net\ncaptainaltcoin.com\ncoindoo.com\nanalyticsinsight.net\nlivebitcoinnews.com\nzycrypto.com\nmoneycheck.com\noptimisus.com\ncoingabbar.com\ncryptotimes.io\ntronweekly.com\ncryptobrowser.io\nglobenewswire.com\ncrypto.news\ncryptorank.io\ncoinmarketcap.com\ncrunchbase.com\ntheportugalnews.com\ntimestabloid.com`)}>
+                📋 Dùng 19 sites có sẵn
+              </button>
+              <button style={S.btn('sm')} onClick={() => setHunterDoms('')}>🗑 Xoá</button>
+            </div>
+            <textarea
+              value={hunterDoms}
+              onChange={e => setHunterDoms(e.target.value)}
+              placeholder={'blockchainreporter.net\ncaptainaltcoin.com\ncoindoo.com\n...\n\nMỗi dòng 1 domain'}
+              style={{ ...S.inp, minHeight: 120, resize: 'vertical', marginBottom: 8, fontFamily: 'monospace', fontSize: 11 }}
+            />
             <div style={S.row}>
               <select value={hunterMode} onChange={e => setHunterMode(e.target.value)} style={{ ...S.inp, flex: 1 }}>
                 <option value="bod">Chỉ BOD — CEO, CFO, CMO, CTO, Founder, Director</option>
-                <option value="all">Tất cả email</option>
+                <option value="all">Tất cả email (không lọc chức danh)</option>
               </select>
-              <button style={S.btn('p')} onClick={doHunter} disabled={busy}>🎯 Tìm ngay</button>
+              <button style={{ ...S.btn('p'), padding: '8px 20px' }} onClick={doHunter} disabled={busy}>
+                🎯 {busy ? 'Đang tìm...' : 'Tìm BOD ngay'}
+              </button>
             </div>
+            <p style={{ fontSize: 10, color: C.t3, marginTop: 6 }}>
+              ⚠ Nếu báo lỗi: vào Vercel → Settings → Environment Variables → kiểm tra <code>HUNTER_API_KEY</code>
+            </p>
           </div>
           {hunterLog.length > 0 && <LogPane logs={hunterLog} pct={hp} />}
         </>}

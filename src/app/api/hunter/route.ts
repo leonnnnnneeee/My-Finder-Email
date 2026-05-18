@@ -3,13 +3,12 @@ import { supabase } from '@/lib/supabase'
 
 const HUNTER_KEY = process.env.HUNTER_API_KEY
 
-// Chức danh BOD cần tìm
 const BOD_TITLES = [
   'CEO', 'Chief Executive', 'Co-Founder', 'Founder',
   'CFO', 'Chief Financial', 'COO', 'Chief Operating',
   'CMO', 'Chief Marketing', 'CTO', 'Chief Technology',
-  'President', 'Director', 'Head of', 'VP ', 'Vice President',
-  'Managing Director', 'General Manager'
+  'President', 'Director', 'Head of', 'VP', 'Vice President',
+  'Managing Director', 'General Manager', 'Partner', 'Chairman'
 ]
 
 function isBOD(title: string): boolean {
@@ -18,12 +17,39 @@ function isBOD(title: string): boolean {
   return BOD_TITLES.some(b => t.includes(b.toLowerCase()))
 }
 
-export async function POST(req: NextRequest) {
-  const { domains, mode } = await req.json()
-  // mode: 'all' | 'bod' (chỉ lấy BOD)
+export async function GET() {
+  // Test endpoint — kiểm tra key còn hoạt động không
+  if (!HUNTER_KEY) return NextResponse.json({ ok: false, error: 'HUNTER_API_KEY chưa được set trong Vercel env vars' })
+  try {
+    const res = await fetch(`https://api.hunter.io/v2/account?api_key=${HUNTER_KEY}`)
+    const d = await res.json()
+    if (d.errors) return NextResponse.json({ ok: false, error: d.errors[0]?.details || 'Invalid key' })
+    return NextResponse.json({
+      ok: true,
+      email: d.data?.email,
+      plan: d.data?.plan_name,
+      requests_remaining: d.data?.requests?.available,
+      requests_used: d.data?.requests?.used
+    })
+  } catch (err: any) {
+    return NextResponse.json({ ok: false, error: err.message })
+  }
+}
 
-  if (!domains?.length) return NextResponse.json({ error: 'Không có domain' }, { status: 400 })
-  if (!HUNTER_KEY) return NextResponse.json({ error: 'Thiếu HUNTER_API_KEY' }, { status: 500 })
+export async function POST(req: NextRequest) {
+  if (!HUNTER_KEY) {
+    return NextResponse.json({
+      error: 'HUNTER_API_KEY chưa được set. Vào Vercel → Settings → Environment Variables → thêm HUNTER_API_KEY',
+      results: []
+    }, { status: 400 })
+  }
+
+  let body: any
+  try { body = await req.json() }
+  catch { return NextResponse.json({ error: 'Invalid JSON', results: [] }, { status: 400 }) }
+
+  const { domains, mode = 'bod' } = body
+  if (!domains?.length) return NextResponse.json({ error: 'Không có domain', results: [] }, { status: 400 })
 
   // Load email đã có để dedup
   const { data: existing } = await supabase.from('emails').select('address')
@@ -32,50 +58,60 @@ export async function POST(req: NextRequest) {
   const results: any[] = []
 
   for (const domain of domains) {
-    const cleanDomain = domain.replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
+    const cleanDomain = domain.replace(/https?:\/\//, '').split('/')[0].replace('www.', '').trim()
+    if (!cleanDomain) continue
 
     try {
-      // Gọi Hunter domain-search
       const url = `https://api.hunter.io/v2/domain-search?domain=${cleanDomain}&limit=10&api_key=${HUNTER_KEY}`
       const res = await fetch(url)
-      const data = await res.json()
 
-      if (data.errors) {
-        results.push({ domain: cleanDomain, error: data.errors[0]?.details || 'Hunter API error', added: 0 })
+      if (!res.ok) {
+        results.push({ domain: cleanDomain, error: `HTTP ${res.status}`, added: 0, skipped: 0, emails: [] })
         continue
       }
 
-      const emails = data.data?.emails || []
+      const data = await res.json()
+
+      if (data.errors?.length) {
+        results.push({ domain: cleanDomain, error: data.errors[0]?.details || 'Hunter error', added: 0, skipped: 0, emails: [] })
+        continue
+      }
+
+      const allEmails = data.data?.emails || []
       const company = data.data?.organization || cleanDomain
 
-      // Lọc BOD nếu mode = bod
+      // Lọc theo mode
       const filtered = mode === 'bod'
-        ? emails.filter((e: any) => isBOD(e.position || ''))
-        : emails
+        ? allEmails.filter((e: any) => isBOD(e.position || ''))
+        : allEmails
 
-      const added: any[] = []
-      const skipped: any[] = []
+      const addedList: any[] = []
+      let skippedCount = 0
 
       for (const e of filtered) {
         const addr = e.value?.toLowerCase()
-        if (!addr) continue
+        if (!addr || !addr.includes('@')) continue
 
         if (existingSet.has(addr)) {
-          skipped.push({ addr, reason: 'trùng' })
+          skippedCount++
           continue
         }
 
-        const { data: inserted, error } = await supabase.from('emails').insert({
+        // Insert vào Supabase
+        const { error: insertErr } = await supabase.from('emails').insert({
           address: addr,
           source_url: `https://${cleanDomain}`,
           domain: cleanDomain,
           status: 'new',
-          // Lưu thêm metadata vào notes nếu có cột
-        }).select().single()
+          contact_name: `${e.first_name || ''} ${e.last_name || ''}`.trim() || null,
+          position: e.position || null,
+          confidence: e.confidence || null,
+          source_type: isBOD(e.position || '') ? 'hunter_bod' : 'hunter',
+        })
 
-        if (!error && inserted) {
+        if (!insertErr) {
           existingSet.add(addr)
-          added.push({
+          addedList.push({
             addr,
             name: `${e.first_name || ''} ${e.last_name || ''}`.trim(),
             position: e.position || '',
@@ -88,17 +124,17 @@ export async function POST(req: NextRequest) {
       results.push({
         domain: cleanDomain,
         company,
-        total: emails.length,
+        found: allEmails.length,
         filtered: filtered.length,
-        added: added.length,
-        skipped: skipped.length,
-        emails: added
+        added: addedList.length,
+        skipped: skippedCount,
+        emails: addedList
       })
 
     } catch (err: any) {
-      results.push({ domain: cleanDomain, error: err.message, added: 0 })
+      results.push({ domain: cleanDomain, error: err.message, added: 0, skipped: 0, emails: [] })
     }
   }
 
-  return NextResponse.json({ results })
+  return NextResponse.json({ results, total_added: results.reduce((s, r) => s + r.added, 0) })
 }
