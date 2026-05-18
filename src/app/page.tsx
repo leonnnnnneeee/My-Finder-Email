@@ -268,18 +268,47 @@ export default function Page() {
 
   async function crawlSite(site: Site) {
     setCrawlingSite(site.id); setCrawlLog([]); setCp(0)
-    addLog(setCrawlLog, `▶ Quét bài mới từ ${site.domain}...`, 'info')
+    addLog(setCrawlLog, `▶ Tìm bài PR/Sponsored trên ${site.domain}...`, 'info')
+    let totalNew = 0
     try {
-      const r = await fetch('/api/crawl-site', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: site.url, maxPages: 8 }) })
-      const d = await r.json()
-      if (d.error) { addLog(setCrawlLog, `✗ ${d.error}`, 'err'); setCrawlingSite(null); return }
-      for (let i = 0; i < (d.results || []).length; i++) {
-        const x = d.results[i]; setCp(Math.round((i + 1) / d.results.length * 100))
-        addLog(setCrawlLog, `📄 ${x.title || x.url}`, 'info')
-        x.newEmails?.forEach((e: string) => addLog(setCrawlLog, `  ✓ ${e}`, 'ok'))
-        if (x.skipped > 0) addLog(setCrawlLog, `  ~ ${x.skipped} trùng`, 'warn')
+      // Bước 1: Upsert site + lấy siteId
+      const initR = await fetch('/api/crawl-site', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: site.url }) })
+      const initD = await initR.json()
+      if (initD.error) { addLog(setCrawlLog, `✗ ${initD.error}`, 'err'); setCrawlingSite(null); return }
+      const siteId = initD.siteId
+
+      // Bước 2: Generate URLs
+      addLog(setCrawlLog, `  Đang tìm bài mới...`, 'dim')
+      const urlsR = await fetch(`/api/crawl-site?action=urls&siteUrl=${encodeURIComponent(site.url)}`)
+      const urlsD = await urlsR.json()
+      const urls: string[] = urlsD.urls || []
+      if (!urls.length) { addLog(setCrawlLog, `  — Không tìm thấy bài mới`, 'warn'); setCrawlingSite(null); loadSites(); return }
+      addLog(setCrawlLog, `  → ${urls.length} bài cần quét`, 'info')
+
+      // Bước 3: Xử lý từng bài một (mỗi request ~8-10s)
+      for (let i = 0; i < urls.length; i++) {
+        const url = urls[i]
+        setCp(Math.round((i + 1) / urls.length * 100))
+        const slug = url.replace(/https?:\/\/[^/]+/, '').slice(0, 55)
+        addLog(setCrawlLog, `\n  📄 ${slug}`, 'info')
+        try {
+          const artR = await fetch('/api/crawl-site', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ articleUrl: url, siteUrl: site.url, siteId })
+          })
+          const artD = await artR.json()
+          if (artD.skipped) { addLog(setCrawlLog, `     ⊘ Non-crypto bỏ qua`, 'dim'); continue }
+          artD.logs?.forEach((l: string) => addLog(setCrawlLog, `     ${l}`, l.includes('✓')||l.includes('→') ? 'ok' : 'dim'))
+          if (artD.saved?.length > 0) {
+            addLog(setCrawlLog, `     ✅ +${artD.saved.length} email: ${artD.saved.join(', ')}`, 'ok')
+            totalNew += artD.saved.length
+          }
+        } catch (e: any) {
+          addLog(setCrawlLog, `     ✗ ${e.message}`, 'err')
+        }
       }
-      addLog(setCrawlLog, `─── ${d.pagesScanned} trang · ${d.newEmails} email mới ───`, 'ok')
+      addLog(setCrawlLog, `\n─── Xong: ${urls.length} bài · +${totalNew} email mới ───`, totalNew > 0 ? 'ok' : 'dim')
     } catch (e: any) { addLog(setCrawlLog, `✗ ${e.message}`, 'err') }
     setCrawlingSite(null); loadSites(); loadEmails()
   }
