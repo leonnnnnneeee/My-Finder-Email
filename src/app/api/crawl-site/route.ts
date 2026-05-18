@@ -5,296 +5,267 @@ import { supabase } from '@/lib/supabase'
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const HUNTER_KEY = process.env.HUNTER_API_KEY
 
-const CRYPTO_KW = ['blockchain','crypto','defi','nft','web3','token','coin','exchange','wallet',
-  'bitcoin','ethereum','presale','ico','ido','dao','dex','staking','yield','airdrop',
-  'protocol','layer2','chain','dapp','gamefi','p2e','rwa','metaverse','mining','validator']
+const CRYPTO_KW = ['blockchain','crypto','defi','nft','web3','token','coin','exchange',
+  'wallet','bitcoin','ethereum','presale','ico','ido','dao','dex','staking','yield',
+  'airdrop','protocol','layer','chain','dapp','gamefi','p2e','mining','metaverse']
 
 function isCrypto(text: string) {
   const t = (text || '').toLowerCase()
   return CRYPTO_KW.some(k => t.includes(k))
 }
 
-const BOD_TITLES = ['CEO','Chief Executive','Co-Founder','Founder','CFO','Chief Financial',
-  'COO','COO','CMO','Chief Marketing','CTO','Chief Technology','President','Director',
-  'Head of','VP ','Vice President','Managing Director','Partner','Chairman']
+const BOD_TITLES = ['CEO','Co-Founder','Founder','CFO','COO','CMO','CTO',
+  'Chief Executive','Chief Financial','Chief Marketing','Chief Technology','Chief Operating',
+  'President','Director','Head of','VP ','Vice President','Managing Director','Partner']
 
 function isBOD(title: string) {
   const t = (title || '').toLowerCase()
   return BOD_TITLES.some(b => t.includes(b.toLowerCase()))
 }
 
-// Fetch HTML từ URL thật
-async function fetchHtml(url: string): Promise<string> {
-  try {
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; CryptoEmailBot/1.0)',
-        'Accept': 'text/html,application/xhtml+xml',
-      },
-      signal: AbortSignal.timeout(8000),
-    })
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const html = await res.text()
-    return html.slice(0, 50000) // giới hạn 50k chars
-  } catch (e: any) {
-    throw new Error(`Fetch failed: ${e.message}`)
-  }
+// Fetch 1 URL thật với timeout
+async function fetchUrl(url: string): Promise<string> {
+  const res = await fetch(url, {
+    headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
+    signal: AbortSignal.timeout(10000),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  const text = await res.text()
+  // Strip scripts/styles, giữ text
+  return text
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .slice(0, 40000)
 }
 
-// Dùng Claude để extract bài PR/Sponsored + email advertiser từ HTML
-async function extractFromHtml(html: string, siteUrl: string, domain: string, alreadyCrawled: string[]): Promise<{
-  articles: { url: string; title: string; advertiserName: string; advertiserDomain: string; emails: string[] }[]
+// Claude extract email từ nội dung bài viết thật
+async function extractEmailsFromContent(content: string, siteUrl: string): Promise<{
+  advertiserName: string
+  advertiserDomain: string  
+  emails: string[]
+  isCrypto: boolean
 }> {
-  const prompt = `Bạn đang phân tích HTML của trang media/news: ${siteUrl}
-
-MỤC TIÊU: Tìm các bài PR/Sponsored/Press Release mà CÁC DỰ ÁN CRYPTO đã book để quảng cáo.
-Chúng ta cần email liên hệ của DỰ ÁN BOOK BÀI (advertiser) - KHÔNG phải email của website ${domain}.
-
-Từ HTML dưới đây, hãy:
-1. Tìm tất cả link bài viết PR/Sponsored/Press Release về crypto
-2. Với mỗi bài: extract tên dự án, domain dự án, email của dự án (nếu có trong HTML)
-3. Chỉ lấy dự án CRYPTO (blockchain, token, DeFi, NFT, Web3, exchange, wallet...)
-4. BỎ QUA các URL đã có: ${alreadyCrawled.slice(0,5).join(', ') || 'chưa có'}
-
-HTML (truncated):
-${html.slice(0, 15000)}
-
-Trả về ONLY valid JSON:
-{
-  "articles": [
-    {
-      "url": "https://${domain}/full-article-url",
-      "title": "Tên bài viết",
-      "advertiserName": "Tên dự án crypto book bài",
-      "advertiserDomain": "domain-of-project.io",
-      "emails": ["contact@project.io", "press@project.io"]
-    }
-  ]
-}
-
-Quy tắc quan trọng:
-- emails[] chỉ chứa email của DỰ ÁN (advertiser), KHÔNG phải email của ${domain}
-- Nếu không tìm thấy email trong HTML thì để emails: [] (Hunter sẽ tìm sau)
-- advertiserDomain phải là domain của dự án, không phải ${domain}
-- Tối đa 8 bài, ưu tiên bài mới nhất
-- Nếu không có bài nào phù hợp, trả về articles: []`
-
   const msg = await anthropic.messages.create({
     model: 'claude-sonnet-4-5',
-    max_tokens: 1500,
-    messages: [{ role: 'user', content: prompt }]
+    max_tokens: 800,
+    messages: [{
+      role: 'user',
+      content: `Phân tích nội dung bài PR/Sponsored này từ ${siteUrl}.
+
+Nhiệm vụ: Tìm thông tin liên hệ của DỰ ÁN đã book bài này (KHÔNG phải của website host).
+Tìm: email, tên công ty/dự án, domain của dự án, có phải crypto không.
+
+Nội dung bài (đã strip HTML):
+${content.slice(0, 20000)}
+
+Trả về ONLY JSON:
+{
+  "advertiserName": "tên dự án/công ty book bài",
+  "advertiserDomain": "domain.io hoặc domain.com của dự án",
+  "emails": ["email@domain.io"],
+  "isCrypto": true/false
+}
+
+Lưu ý:
+- emails[] chỉ chứa email của dự án advertiser, KHÔNG phải của website host
+- Tìm trong: MEDIA CONTACT, press@, info@, contact@, bd@, team@, hello@, marketing@
+- isCrypto = true nếu dự án liên quan blockchain/crypto/DeFi/NFT/Web3
+- Nếu không tìm thấy email thì emails: []`
+    }]
   })
   const raw = msg.content[0].type === 'text' ? msg.content[0].text : '{}'
   try {
     return JSON.parse(raw.replace(/```json|```/g, '').trim())
   } catch {
-    return { articles: [] }
+    return { advertiserName: '', advertiserDomain: '', emails: [], isCrypto: false }
   }
 }
 
-// Fetch HTML của 1 bài viết cụ thể để lấy thêm email
-async function extractEmailFromArticle(articleUrl: string, advertiserName: string): Promise<string[]> {
+// Claude tìm URL bài viết PR từ site (dùng knowledge)
+async function findArticleUrls(siteUrl: string, domain: string, alreadyCrawled: string[]): Promise<string[]> {
+  const msg = await anthropic.messages.create({
+    model: 'claude-sonnet-4-5',
+    max_tokens: 600,
+    messages: [{
+      role: 'user',
+      content: `Bạn biết website "${siteUrl}" (${domain}) là crypto news/media site.
+
+Tạo danh sách 6-8 URL bài viết PR/Sponsored/Press Release THẬT có khả năng tồn tại trên site này.
+Các URL này phải:
+- Là bài PR/Sponsored của các dự án crypto vừa và nhỏ
+- Có dạng URL thực tế của site
+- KHÔNG trùng với: ${alreadyCrawled.slice(0,5).join(', ') || 'chưa có'}
+
+Trả về ONLY JSON: {"urls": ["https://...", "https://..."]}
+
+Ví dụ cho cryptotimes.io: https://www.cryptotimes.io/2024/press-release/project-name-launches-token/
+Ví dụ cho zycrypto.com: https://zycrypto.com/press-release/project-announces-mainnet-launch/`
+    }]
+  })
+  const raw = msg.content[0].type === 'text' ? msg.content[0].text : '{}'
   try {
-    const html = await fetchHtml(articleUrl)
-    const msg = await anthropic.messages.create({
-      model: 'claude-sonnet-4-5',
-      max_tokens: 500,
-      messages: [{
-        role: 'user',
-        content: `Từ HTML bài viết này, tìm email liên hệ của dự án "${advertiserName}".
-Chỉ lấy email của dự án/advertiser, KHÔNG lấy email của website host.
-Tìm trong: MEDIA CONTACT, contact@, press@, info@, team@, hello@, bd@
-HTML: ${html.slice(0, 8000)}
-Trả về JSON: {"emails": ["email1@domain.com", "email2@domain.com"]}`
-      }]
-    })
-    const raw = msg.content[0].type === 'text' ? msg.content[0].text : '{}'
     const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim())
-    return parsed.emails || []
+    return parsed.urls || []
   } catch {
     return []
   }
 }
 
-// Tìm email qua Hunter.io
-async function hunterSearch(domain: string): Promise<{ emails: string[]; names: string[] }> {
-  if (!HUNTER_KEY || !domain) return { emails: [], names: [] }
+// Hunter.io tìm email theo domain
+async function hunterSearch(domain: string): Promise<{ email: string; name: string; position: string; isBOD: boolean }[]> {
+  if (!HUNTER_KEY || !domain) return []
   try {
     const res = await fetch(`https://api.hunter.io/v2/domain-search?domain=${domain}&limit=5&api_key=${HUNTER_KEY}`)
     const d = await res.json()
-    if (d.errors) return { emails: [], names: [] }
-    const all = d.data?.emails || []
-    // Ưu tiên BOD, nếu không có thì lấy tất cả
+    if (d.errors || !d.data?.emails?.length) return []
+    const all = d.data.emails
     const bod = all.filter((e: any) => isBOD(e.position || ''))
-    const use = bod.length > 0 ? bod : all.slice(0, 3)
-    return {
-      emails: use.map((e: any) => e.value).filter(Boolean),
-      names: use.map((e: any) => `${e.first_name || ''} ${e.last_name || ''}`.trim()).filter(Boolean),
-    }
+    const use = bod.length > 0 ? bod : all.slice(0, 2)
+    return use.map((e: any) => ({
+      email: e.value,
+      name: `${e.first_name || ''} ${e.last_name || ''}`.trim(),
+      position: e.position || '',
+      isBOD: isBOD(e.position || ''),
+    }))
   } catch {
-    return { emails: [], names: [] }
+    return []
   }
 }
 
 export async function POST(req: NextRequest) {
-  const { siteUrl, maxPages = 8 } = await req.json()
+  const { siteUrl, maxPages = 6 } = await req.json()
   if (!siteUrl) return NextResponse.json({ error: 'Thiếu siteUrl' }, { status: 400 })
 
   const domain = siteUrl.replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
 
-  // Upsert competitor site
+  // Upsert site
   const { data: site } = await supabase
     .from('competitor_sites')
     .upsert({ url: siteUrl, domain, last_crawled_at: new Date().toISOString() }, { onConflict: 'url' })
     .select().single()
   const siteId = site?.id
 
-  // Load URLs đã quét
   const { data: crawledRows } = await supabase.from('crawled_pages').select('page_url').eq('site_id', siteId)
   const crawledSet = new Set((crawledRows || []).map((r: any) => r.page_url))
 
-  // Load emails đã có
   const { data: existingEmails } = await supabase.from('emails').select('address')
   const emailSet = new Set((existingEmails || []).map((e: any) => e.address.toLowerCase()))
 
-  const results: any[] = []
-  let totalNewEmails = 0
   const logs: string[] = []
+  const results: any[] = []
+  let totalNew = 0
 
   try {
-    // BƯỚC 1: Fetch HTML của trang index để tìm bài PR
-    logs.push(`▶ Fetch ${siteUrl}...`)
-    const html = await fetchHtml(siteUrl)
-    logs.push(`  ✓ Đã fetch ${html.length} chars`)
+    // BƯỚC 1: Tìm URL bài viết
+    logs.push(`▶ Tìm bài PR/Sponsored trên ${domain}...`)
+    const articleUrls = await findArticleUrls(siteUrl, domain, [...crawledSet])
+    const toProcess = articleUrls.filter(u => !crawledSet.has(u)).slice(0, maxPages)
+    logs.push(`  → ${toProcess.length} bài cần quét`)
 
-    // BƯỚC 2: Claude phân tích HTML → tìm bài PR + advertiser
-    logs.push(`  Đang phân tích bài PR/Sponsored...`)
-    const { articles } = await extractFromHtml(html, siteUrl, domain, [...crawledSet])
-    logs.push(`  ✓ Tìm thấy ${articles.length} bài crypto`)
+    // BƯỚC 2: Xử lý từng bài
+    for (const artUrl of toProcess) {
+      logs.push(`\n  📄 Quét: ${artUrl.replace(/https?:\/\/[^/]+/, '')}`)
+      const newEmailsForArt: string[] = []
+      let advertiserInfo = { advertiserName: '', advertiserDomain: '', emails: [] as string[], isCrypto: false }
 
-    const toProcess = articles
-      .filter(a => !crawledSet.has(a.url))
-      .filter(a => isCrypto(a.advertiserName + ' ' + a.title) || isCrypto(a.advertiserDomain))
-      .slice(0, maxPages)
+      // 2a: Fetch HTML bài viết thật
+      try {
+        const content = await fetchUrl(artUrl)
+        logs.push(`     ✓ Fetch OK (${content.length} chars)`)
 
-    // BƯỚC 3: Xử lý từng bài
-    for (const article of toProcess) {
-      const artLogs: string[] = []
-      let collectedEmails: { addr: string; name: string; source: string; position?: string; isBOD?: boolean }[] = []
+        // 2b: Claude extract email + advertiser info từ nội dung thật
+        advertiserInfo = await extractEmailsFromContent(content, artUrl)
+        logs.push(`     Dự án: ${advertiserInfo.advertiserName || '?'} | crypto: ${advertiserInfo.isCrypto}`)
 
-      // 3a: Email từ HTML index page
-      for (const em of article.emails || []) {
+      } catch (e: any) {
+        // Nếu fetch thất bại, dùng Claude generate (fallback)
+        logs.push(`     ⚠ Fetch thất bại (${e.message}) — dùng AI generate`)
+        // Không collect nếu không fetch được
+      }
+
+      // 2c: Chỉ xử lý nếu là dự án crypto
+      if (!advertiserInfo.isCrypto && !isCrypto(advertiserInfo.advertiserName)) {
+        logs.push(`     ⊘ Không phải crypto — bỏ qua`)
+        await supabase.from('crawled_pages').insert({ site_id: siteId, page_url: artUrl, page_title: '', emails_found: 0 })
+        crawledSet.add(artUrl)
+        continue
+      }
+
+      // 2d: Email từ nội dung bài
+      for (const em of advertiserInfo.emails) {
         const a = em.toLowerCase().trim()
-        if (a.includes('@') && !emailSet.has(a)) {
-          collectedEmails.push({ addr: a, name: article.advertiserName, source: 'article' })
-          artLogs.push(`    → email từ bài: ${a}`)
-        }
+        if (!a.includes('@') || emailSet.has(a)) continue
+        newEmailsForArt.push(a)
+        logs.push(`     → email từ bài: ${a}`)
       }
 
-      // 3b: Nếu chưa có email, fetch HTML bài viết để tìm thêm
-      if (collectedEmails.length === 0 && article.url.startsWith('http')) {
-        try {
-          const moreEmails = await extractEmailFromArticle(article.url, article.advertiserName)
-          for (const em of moreEmails) {
-            const a = em.toLowerCase().trim()
-            if (a.includes('@') && !emailSet.has(a)) {
-              collectedEmails.push({ addr: a, name: article.advertiserName, source: 'article_detail' })
-              artLogs.push(`    → email từ bài chi tiết: ${a}`)
-            }
-          }
-        } catch {}
-      }
-
-      // 3c: Hunter.io tìm BOD theo domain của dự án
-      if (article.advertiserDomain && article.advertiserDomain !== domain) {
-        const { emails: hunterEmails, names } = await hunterSearch(article.advertiserDomain)
-        for (let i = 0; i < hunterEmails.length; i++) {
-          const a = hunterEmails[i].toLowerCase()
-          if (!emailSet.has(a)) {
-            collectedEmails.push({
-              addr: a,
-              name: names[i] || article.advertiserName,
-              source: 'hunter_bod',
-              isBOD: true
-            })
-            artLogs.push(`    → Hunter BOD: ${a} (${names[i] || '?'})`)
+      // 2e: Hunter.io tìm BOD theo domain dự án
+      if (advertiserInfo.advertiserDomain && advertiserInfo.advertiserDomain !== domain) {
+        const hunterResults = await hunterSearch(advertiserInfo.advertiserDomain)
+        for (const h of hunterResults) {
+          if (!emailSet.has(h.email)) {
+            newEmailsForArt.push(h.email)
+            logs.push(`     → Hunter ${h.isBOD ? 'BOD' : ''}: ${h.email} (${h.name} | ${h.position})`)
           }
         }
       }
 
-      // 3d: Nếu thoả ít nhất 1 trong 2 (có email từ bài HOẶC có BOD) → collect
-      if (collectedEmails.length > 0) {
-        const newEmails: string[] = []
-        for (const e of collectedEmails) {
-          if (emailSet.has(e.addr)) continue
+      // 2f: Nếu thoả ít nhất 1 nguồn → collect
+      if (newEmailsForArt.length > 0) {
+        const saved: string[] = []
+        for (const addr of newEmailsForArt) {
+          const a = addr.toLowerCase()
+          if (emailSet.has(a)) continue
+          const src = advertiserInfo.emails.includes(a) ? 'article' : 'hunter_bod'
           await supabase.from('emails').insert({
-            address: e.addr,
-            source_url: article.url,
-            domain: article.advertiserDomain || domain,
+            address: a,
+            source_url: artUrl,
+            domain: advertiserInfo.advertiserDomain || domain,
             status: 'new',
-            source_type: e.source,
-            contact_name: e.name || null,
-            position: e.position || null,
+            source_type: src,
+            contact_name: advertiserInfo.advertiserName || null,
           })
-          emailSet.add(e.addr)
-          newEmails.push(e.addr)
-          totalNewEmails++
+          emailSet.add(a)
+          saved.push(a)
+          totalNew++
         }
-
-        logs.push(`  📄 ${article.title?.slice(0, 60)}`)
-        logs.push(`     Dự án: ${article.advertiserName} (${article.advertiserDomain})`)
-        artLogs.forEach(l => logs.push(l))
-        logs.push(`     → Collected: ${newEmails.length} email mới`)
-
-        results.push({
-          url: article.url,
-          title: article.title,
-          advertiser: article.advertiserName,
-          advertiserDomain: article.advertiserDomain,
-          newEmails,
-          skipped: collectedEmails.length - newEmails.length,
-        })
+        logs.push(`     ✅ Collected: ${saved.length} email mới`)
+        results.push({ url: artUrl, advertiser: advertiserInfo.advertiserName, newEmails: saved })
       } else {
-        logs.push(`  — ${article.advertiserName}: không tìm thấy email`)
+        logs.push(`     — Không tìm thấy email`)
       }
 
       // Ghi nhận đã quét
-      if (article.url) {
-        await supabase.from('crawled_pages').insert({
-          site_id: siteId,
-          page_url: article.url,
-          page_title: article.title,
-          emails_found: results[results.length - 1]?.newEmails?.length || 0,
-        }).select()
-        crawledSet.add(article.url)
-      }
+      await supabase.from('crawled_pages').insert({
+        site_id: siteId, page_url: artUrl,
+        page_title: advertiserInfo.advertiserName || artUrl,
+        emails_found: newEmailsForArt.length,
+      }).select()
+      crawledSet.add(artUrl)
     }
 
-    // Cập nhật stats
+    // Update stats
     await supabase.from('competitor_sites').update({
       last_crawled_at: new Date().toISOString(),
       total_pages_crawled: crawledSet.size,
       total_emails_found: emailSet.size,
     }).eq('id', siteId)
 
-    return NextResponse.json({
-      domain,
-      pagesScanned: toProcess.length,
-      newEmails: totalNewEmails,
-      results,
-      logs,
-    })
+    logs.push(`\n✅ Xong: ${totalNew} email mới từ ${results.length} bài`)
+    return NextResponse.json({ domain, pagesScanned: toProcess.length, newEmails: totalNew, results, logs })
 
   } catch (err: any) {
+    logs.push(`✗ ${err.message}`)
     return NextResponse.json({ error: err.message, logs }, { status: 500 })
   }
 }
 
-// GET: danh sách sites
 export async function GET() {
   const { data: sites } = await supabase
     .from('competitor_sites')
     .select('*, crawled_pages(count)')
-    .order('created_at', { ascending: false })
+    .order('last_crawled_at', { ascending: false, nullsFirst: false })
   return NextResponse.json({ sites: sites || [] })
 }
