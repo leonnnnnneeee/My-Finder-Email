@@ -375,22 +375,24 @@ export default function Page() {
     if (!testTo || !testSubject || !testBody) { alert('Điền đầy đủ email nhận, subject và nội dung!'); return }
     setTestStatus('sending'); setTestMsg('')
     try {
-      const r = await fetch('/api/test-email', {
+      const r = await fetch('/api/send-emails', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: testTo, subject: testSubject, body: testBody, fromName: 'LEON (Mr.) — Coincu', fromEmail: 'leon@coincu.com', isTest: true })
+        body: JSON.stringify({ testTo, subject: '[TEST] ' + testSubject, bodyText: testBody, fromName: fromName || 'LEON (Mr.)', fromEmail: fromEmail || 'leon@coincu.com' })
       })
       const d = await r.json()
-      if (d.success) { setTestStatus('ok'); setTestMsg(`✅ Đã gửi thành công đến ${testTo}! Kiểm tra hộp thư.`) }
+      if (d.ok) { setTestStatus('ok'); setTestMsg(`✅ Đã gửi thành công đến ${testTo}! (${d.provider}) Kiểm tra hộp thư.`) }
       else { setTestStatus('err'); setTestMsg(`✗ Lỗi: ${d.error || 'Không rõ'}`) }
     } catch (e: any) { setTestStatus('err'); setTestMsg(`✗ ${e.message}`) }
   }
 
   async function checkSmtp() {
     try {
-      const r = await fetch('/api/test-email')
+      const r = await fetch('/api/send-emails')
       const d = await r.json()
-      setSmtpOk(d.configured)
+      setSmtpOk(d.provider !== 'none')
+      if (d.provider === 'none') alert('Chưa cấu hình! Cần thêm RESEND_API_KEY hoặc SMTP_HOST+SMTP_USER+SMTP_PASS vào Vercel.')
+      else alert(`✅ ${d.provider === 'resend' ? 'Resend API' : 'SMTP'} đã sẵn sàng!`)
     } catch { setSmtpOk(false) }
   }
 
@@ -765,12 +767,35 @@ export default function Page() {
 
         {/* SEND */}
         {tab === 'send' && <>
-          <div style={{ ...S.card(), background: C.b2, border: 'none', fontSize: 12, marginBottom: 10 }}>
-            <span style={{ color: C.amber, fontWeight: 600 }}>{unsentCount}</span>
-            <span style={{ color: C.t2 }}> email chưa gửi · </span>
-            <span style={{ color: C.green, fontWeight: 600 }}>{sentCount}</span>
-            <span style={{ color: C.t2 }}> đã gửi sẽ tự bỏ qua</span>
+          <div style={{ ...S.card(), background: C.b2, border: 'none', fontSize: 12, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+            <span>
+              <span style={{ color: C.amber, fontWeight: 600 }}>{unsentCount}</span>
+              <span style={{ color: C.t2 }}> email chưa gửi · </span>
+              <span style={{ color: C.green, fontWeight: 600 }}>{sentCount}</span>
+              <span style={{ color: C.t2 }}> đã gửi sẽ bỏ qua</span>
+            </span>
+            <button style={S.btn('sm')} onClick={checkSmtp}>🔌 Kiểm tra SMTP/Resend</button>
           </div>
+
+          {/* Email list tìm được */}
+          {emails.filter(e => e.status === 'new').length > 0 && (
+            <div style={{ ...S.card(), marginBottom: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: C.t2, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                📬 Email sẽ được gửi ({emails.filter(e=>e.status==='new').length})
+              </div>
+              <div style={{ background: C.b0, border: `1px solid ${C.bd}`, borderRadius: 8, maxHeight: 160, overflowY: 'auto' }}>
+                {emails.filter(e => e.status === 'new').map((e, i) => (
+                  <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderBottom: i < emails.filter(x=>x.status==='new').length-1 ? `1px solid ${C.bd}` : 'none' }}>
+                    <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, flex: 1 }}>{e.address}</span>
+                    <span style={{ fontSize: 10, color: C.t3 }}>{e.contact_name || e.domain}</span>
+                    <span style={S.bdg(e.source_type === 'hunter_bod' ? C.amberDim : C.blueDim, e.source_type === 'hunter_bod' ? C.amber : C.cyan)}>
+                      {e.source_type === 'hunter_bod' ? 'BOD👑' : 'Bài viết'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div style={{ ...S.card(), background: `linear-gradient(135deg,${C.b1} 0%,#0f1825 100%)`, border: `1px solid ${C.blueDim}` }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
               <div><label style={{ fontSize: 11, color: C.t2, display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>Tên người gửi</label><input value={fromName} onChange={e => setFromName(e.target.value)} style={S.inp} /></div>

@@ -13,7 +13,8 @@
     "next": "^16.2.6",
     "nodemailer": "^6.9.13",
     "react": "^19",
-    "react-dom": "^19"
+    "react-dom": "^19",
+    "resend": "^6.12.3"
   },
   "devDependencies": {
     "@types/node": "^20",
