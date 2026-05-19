@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+const DOMAIN_ID = '33073cd6-8b31-4e2e-93cd-d8d76d994acd'
+
 export async function GET() {
   const key = process.env.RESEND_FULL_KEY || process.env.RESEND_API_KEY
-  const r = await fetch('https://api.resend.com/domains', {
+  // Lấy domain details kèm DNS records
+  const r = await fetch(`https://api.resend.com/domains/${DOMAIN_ID}`, {
     headers: { 'Authorization': `Bearer ${key}` }
   })
   return NextResponse.json(await r.json())
@@ -10,19 +13,10 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const key = process.env.RESEND_FULL_KEY || process.env.RESEND_API_KEY
-  const { action, domainId } = await req.json()
+  const { action } = await req.json()
 
-  if (action === 'add') {
-    const r = await fetch('https://api.resend.com/domains', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'coincu.com', region: 'us-east-1' })
-    })
-    return NextResponse.json(await r.json())
-  }
-
-  if (action === 'verify' && domainId) {
-    const r = await fetch(`https://api.resend.com/domains/${domainId}/verify`, {
+  if (action === 'verify') {
+    const r = await fetch(`https://api.resend.com/domains/${DOMAIN_ID}/verify`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${key}` }
     })
