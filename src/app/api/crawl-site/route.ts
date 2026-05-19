@@ -223,10 +223,13 @@ export async function POST(req: NextRequest) {
   if (!skipped && rssEmails.length > 0) {
     for (const em of rssEmails) {
       const a = em.toLowerCase()
-      if (!emailSet.has(a) && !a.includes(hostDomain.split('.')[0])) {
+      if (!a.includes(hostDomain.split('.')[0])) {
         advertiserDomain = a.split('@')[1] || ''
-        foundEmails.push({ addr: a, src: 'article', name: advertiserName||'', domain: advertiserDomain||hostDomain, pos: '' })
-        if (!dryRun) {
+        const alreadyInDB = emailSet.has(a)
+        if (!alreadyInDB || dryRun) {
+          foundEmails.push({ addr: a, src: 'article', name: advertiserName||'', domain: advertiserDomain||hostDomain, pos: '' })
+        }
+        if (!dryRun && !alreadyInDB) {
           await supabase.from('emails').insert({
             address: a, source_url: articleUrl,
             domain: advertiserDomain||hostDomain, status: 'new',
