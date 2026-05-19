@@ -50,6 +50,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(await r.json())
   }
 
+  if (action === 'list_zones') {
+    const r = await fetch('https://api.cloudflare.com/client/v4/zones', {
+      headers: { 'Authorization': `Bearer ${cfToken}` }
+    })
+    const d = await r.json()
+    return NextResponse.json({ zones: d.result?.map((z: any) => ({ id: z.id, name: z.name, status: z.status })) })
+  }
+
   if (action === 'check_zone') {
     const r = await fetch(`https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records?per_page=5`, {
       headers: { 'Authorization': `Bearer ${cfToken}` }
