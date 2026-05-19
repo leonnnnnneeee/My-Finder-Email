@@ -247,18 +247,20 @@ export async function POST(req: NextRequest) {
     try {
       const hunterR = await hunterBOD(advertiserDomain)
       for (const h of hunterR) {
-        if (h.email && !emailSet.has(h.email)) {
-          await supabase.from('emails').insert({
-            address: h.email,
-            source_url: articleUrl,
-            domain: advertiserDomain,
-            status: 'new',
-            source_type: 'hunter_bod',
-            contact_name: h.name || null,
-            position: h.position || null,
-          })
-          emailSet.add(h.email)
-          saved.push(h.email)
+        if (h.email) {
+          const alreadyH = emailSet.has(h.email)
+          if (!alreadyH || dryRun) {
+            foundEmails.push({ addr: h.email, src: 'hunter_bod', name: h.name||'', domain: advertiserDomain, pos: h.position||'' })
+          }
+          if (!dryRun && !alreadyH) {
+            await supabase.from('emails').insert({
+              address: h.email, source_url: articleUrl,
+              domain: advertiserDomain, status: 'new',
+              source_type: 'hunter_bod', contact_name: h.name||null, position: h.position||null,
+            })
+            emailSet.add(h.email)
+            saved.push(h.email)
+          }
           logs.push(`  → [Hunter${isBOD(h.position) ? 'BOD👑' : ''}] ${h.email}`)
         }
       }
