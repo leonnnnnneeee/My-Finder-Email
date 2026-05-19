@@ -22,8 +22,8 @@ async function notifyTelegram(sent: number, failed: number) {
 
 async function sendViaResend(to: string, from: string, fromName: string, subject: string, html: string) {
   const resend = new Resend(process.env.RESEND_API_KEY)
-  // Dùng onboarding@resend.dev (verified) hoặc RESEND_FROM_EMAIL nếu đã verify domain
-  const senderEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
+  // Dùng onboarding@resend.dev - verified by default, reply-to là email thật
+  const senderEmail = 'onboarding@resend.dev'
   const { error } = await resend.emails.send({
     from: `${fromName} <${senderEmail}>`,
     replyTo: from,
