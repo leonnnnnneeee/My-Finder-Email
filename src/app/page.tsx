@@ -270,49 +270,50 @@ export default function Page() {
 
   async function crawlSite(site: Site) {
     setCrawlingSite(site.id); setCrawlLog([]); setCp(0); setStagedEmails([])
-    addLog(setCrawlLog, `▶ Tìm bài PR/Sponsored trên ${site.domain}...`, 'info')
+    addLog(setCrawlLog, `▶ Quét ${site.domain}...`, 'info')
     try {
-      const initR = await fetch('/api/crawl-site', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: site.url }) })
-      const initD = await initR.json()
+      const initD = await fetch('/api/crawl-site', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: site.url }) }).then(r => r.json())
       if (initD.error) { addLog(setCrawlLog, `✗ ${initD.error}`, 'err'); setCrawlingSite(null); return }
       const siteId = initD.siteId
-      addLog(setCrawlLog, `  Đang tìm bài mới...`, 'dim')
-      const urlsR = await fetch(`/api/crawl-site?action=urls&siteUrl=${encodeURIComponent(site.url)}`)
-      const urlsD = await urlsR.json()
+      addLog(setCrawlLog, `  Đang lấy bài từ RSS...`, 'dim')
+      const urlsD = await fetch(`/api/crawl-site?action=urls&siteUrl=${encodeURIComponent(site.url)}`).then(r => r.json())
       const urls: string[] = urlsD.urls || []
       const preloaded = urlsD.preloadedEmails || {}
-      if (!urls.length) { addLog(setCrawlLog, `  — Không tìm thấy bài mới`, 'warn'); setCrawlingSite(null); loadSites(); return }
+      if (!urls.length) { addLog(setCrawlLog, `  — Không có bài mới`, 'warn'); setCrawlingSite(null); loadSites(); return }
       addLog(setCrawlLog, `  → ${urls.length} bài cần quét`, 'info')
-      const found: StagedEmail[] = []
+
+      const allFound: StagedEmail[] = []
       for (let i = 0; i < urls.length; i++) {
         const url = urls[i]
         setCp(Math.round((i + 1) / urls.length * 100))
-        const slug = url.replace(/https?:\/\/[^/]+/, '').slice(0, 55)
+        const slug = url.replace(/https?:\/\/[^/]+/, '').slice(0, 60)
         addLog(setCrawlLog, `\n  📄 ${slug}`, 'info')
         try {
-          const artR = await fetch('/api/crawl-site', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+          const artD = await fetch('/api/crawl-site', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ articleUrl: url, siteUrl: site.url, siteId, preloadedEmails: preloaded, dryRun: true })
-          })
-          const artD = await artR.json()
+          }).then(r => r.json())
           if (artD.skipped) { addLog(setCrawlLog, `     ⊘ Non-crypto`, 'dim'); continue }
-          artD.logs?.forEach((l: string) => addLog(setCrawlLog, `     ${l}`, l.includes('✓')||l.includes('→') ? 'ok' : 'dim'))
+          artD.logs?.forEach((l: string) => addLog(setCrawlLog, `     ${l}`, l.includes('→') ? 'ok' : 'dim'))
           if (artD.found?.length > 0) {
-            artD.found.forEach((e: any) => {
-              found.push({ addr: e.addr, src: e.src, name: e.name || '', domain: e.domain || '', pos: e.pos || '', articleUrl: url, articleTitle: artD.advertiserName || slug, checked: true })
-              addLog(setCrawlLog, `     📧 ${e.addr} [${e.src === 'hunter_bod' ? 'BOD👑' : 'Bài'}]`, 'ok')
+            const newEmails: StagedEmail[] = artD.found.map((e: any) => ({
+              addr: e.addr, src: e.src, name: e.name || '', domain: e.domain || '',
+              pos: e.pos || '', articleUrl: url, articleTitle: artD.advertiserName || slug, checked: true
+            }))
+            allFound.push(...newEmails)
+            setStagedEmails(prev => {
+              const existing = new Set(prev.map(x => x.addr))
+              return [...prev, ...newEmails.filter(x => !existing.has(x.addr))]
             })
-            setStagedEmails(p => [...p, ...artD.found.map((e: any) => ({ addr: e.addr, src: e.src, name: e.name||'', domain: e.domain||'', pos: e.pos||'', articleUrl: url, articleTitle: artD.advertiserName||slug, checked: true }))])
           }
         } catch (e: any) { addLog(setCrawlLog, `     ✗ ${e.message}`, 'err') }
       }
-      addLog(setCrawlLog, `\n─── Tìm thấy ${found.length} email — chọn và nhấn Collect ───`, found.length > 0 ? 'ok' : 'dim')
+      addLog(setCrawlLog, `\n─── Xong: ${allFound.length} email tìm thấy ───`, allFound.length > 0 ? 'ok' : 'dim')
     } catch (e: any) { addLog(setCrawlLog, `✗ ${e.message}`, 'err') }
     setCrawlingSite(null); loadSites()
   }
 
-  async function collectStaged() {
+    async function collectStaged() {
     const selected = stagedEmails.filter(e => e.checked)
     if (!selected.length) return alert('Chưa chọn email nào!')
     let saved = 0

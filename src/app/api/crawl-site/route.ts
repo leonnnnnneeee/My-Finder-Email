@@ -5,7 +5,6 @@ import { supabase } from '@/lib/supabase'
 
 const HUNTER_KEY = process.env.HUNTER_API_KEY
 
-// RSS/Sitemap feeds thật — không bị block như HTML pages
 const SITE_FEEDS: Record<string, string[]> = {
   'zycrypto.com':           ['https://zycrypto.com/feed/', 'https://zycrypto.com/category/press-releases/feed/'],
   'cryptotimes.io':         ['https://www.cryptotimes.io/feed/', 'https://www.cryptotimes.io/category/press-release/feed/'],
@@ -29,18 +28,25 @@ const SITE_FEEDS: Record<string, string[]> = {
 
 const CRYPTO_KW = ['blockchain','crypto','defi','nft','web3','token','coin','exchange',
   'wallet','bitcoin','ethereum','presale','ico','ido','dao','dex','staking',
-  'airdrop','protocol','dapp','gamefi','mining','altcoin','metaverse']
+  'airdrop','protocol','dapp','gamefi','mining','altcoin','metaverse','bsc','solana']
+
 const BOD_TITLES = ['CEO','Co-Founder','Founder','CFO','COO','CMO','CTO',
   'Chief Executive','Chief Financial','Chief Marketing','Chief Technology',
   'President','Director','Head of','VP ','Vice President','Partner']
 
-function isCrypto(t: string) { return CRYPTO_KW.some(k => (t||'').toLowerCase().includes(k)) }
-function isBOD(t: string) { return BOD_TITLES.some(b => (t||'').toLowerCase().includes(b.toLowerCase())) }
+function isCrypto(t: string) {
+  const low = (t || '').toLowerCase()
+  return CRYPTO_KW.some(k => low.includes(k))
+}
+
+function isBOD(t: string) {
+  return BOD_TITLES.some(b => (t || '').toLowerCase().includes(b.toLowerCase()))
+}
 
 function extractEmails(text: string, excludeDomain: string): string[] {
   const emailRe = /[\w.+%-]{1,64}@[\w-]+\.[\w.]{2,}/g
   const found = text.match(emailRe) || []
-  const excludeBase = excludeDomain.replace('www.','').split('.')[0]
+  const excludeBase = excludeDomain.replace('www.', '').split('.')[0]
   return [...new Set(found.filter(e =>
     !e.toLowerCase().includes(excludeBase) &&
     !e.includes('example.') && !e.includes('sentry.') &&
@@ -52,10 +58,7 @@ function extractEmails(text: string, excludeDomain: string): string[] {
 
 async function fetchFeed(url: string): Promise<string> {
   const res = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; FeedParser/1.0)',
-      'Accept': 'application/rss+xml, application/xml, text/xml, */*',
-    },
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; FeedParser/1.0)', 'Accept': 'application/rss+xml, application/xml, text/xml, */*' },
     signal: AbortSignal.timeout(6000),
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
@@ -77,7 +80,6 @@ async function fetchArticle(url: string): Promise<string> {
     .slice(0, 20000)
 }
 
-// Parse RSS feed → lấy article URLs + email từ description
 function parseRSS(xml: string, hostDomain: string): { url: string; title: string; emails: string[] }[] {
   const items: { url: string; title: string; emails: string[] }[] = []
   const itemRe = /<item[\s\S]*?<\/item>/gi
@@ -88,10 +90,9 @@ function parseRSS(xml: string, hostDomain: string): { url: string; title: string
     const titleMatch = item.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/)
     if (!linkMatch) continue
     const url = linkMatch[1].trim()
-    const title = (titleMatch?.[1] || '').replace(/\s+/g, ' ').trim()
-    // Extract emails từ RSS description/content
+    const title = (titleMatch?.[1] || '').replace(/\s+/g, ' ').trim().slice(0, 150)
     const emails = extractEmails(item, hostDomain)
-    items.push({ url, title, emails })
+    if (url.startsWith('http')) items.push({ url, title, emails })
   }
   return items
 }
@@ -100,23 +101,23 @@ async function hunterBOD(domain: string): Promise<{ email: string; name: string;
   if (!HUNTER_KEY || !domain?.includes('.')) return []
   try {
     const r = await fetch(
-      `https://api.hunter.io/v2/domain-search?domain=${domain}&limit=3&api_key=${HUNTER_KEY}`,
-      { signal: AbortSignal.timeout(4000) }
+      `https://api.hunter.io/v2/domain-search?domain=${domain}&limit=5&api_key=${HUNTER_KEY}`,
+      { signal: AbortSignal.timeout(5000) }
     )
     const d = await r.json()
     if (d.errors || !d.data?.emails?.length) return []
     const all = d.data.emails
     const bod = all.filter((e: any) => isBOD(e.position || ''))
-    const use = bod.length ? bod.slice(0, 2) : all.slice(0, 2)
+    const use = bod.length ? bod.slice(0, 3) : all.slice(0, 2)
     return use.map((e: any) => ({
       email: e.value,
-      name: `${e.first_name||''} ${e.last_name||''}`.trim(),
+      name: `${e.first_name || ''} ${e.last_name || ''}`.trim(),
       position: e.position || ''
     }))
   } catch { return [] }
 }
 
-// GET ?action=urls → lấy article URLs từ RSS feed
+// GET ?action=urls → lấy article URLs từ RSS
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
 
@@ -125,6 +126,7 @@ export async function GET(req: NextRequest) {
     const domain = siteUrl.replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
     const feeds = SITE_FEEDS[domain] || [`https://${domain}/feed/`]
 
+    // Lấy danh sách đã quét để bỏ qua
     const { data: site } = await supabase.from('competitor_sites').select('id').eq('domain', domain).maybeSingle()
     const { data: crawled } = site
       ? await supabase.from('crawled_pages').select('page_url').eq('site_id', site.id)
@@ -139,7 +141,7 @@ export async function GET(req: NextRequest) {
         const xml = await fetchFeed(feedUrl)
         const items = parseRSS(xml, domain)
         for (const item of items) {
-          if (item.url && item.url.startsWith('http') && !crawledSet.has(item.url)) {
+          if (!crawledSet.has(item.url)) {
             articleMap.set(item.url, { title: item.title, emails: item.emails })
           }
         }
@@ -149,7 +151,6 @@ export async function GET(req: NextRequest) {
     }
 
     const urls = [...articleMap.keys()].slice(0, 10)
-    // Cũng trả về emails đã extract từ RSS (nhanh, không cần fetch thêm)
     const preloadedEmails = Object.fromEntries(articleMap)
     return NextResponse.json({ urls, domain, errors, preloadedEmails })
   }
@@ -162,11 +163,11 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ sites: sites || [] })
 }
 
-// POST: init site hoặc process 1 article
+// POST: init site hoặc xử lý 1 article
 export async function POST(req: NextRequest) {
   const body = await req.json()
 
-  // Init site
+  // Init site (không có articleUrl)
   if (!body.articleUrl) {
     const { siteUrl } = body
     if (!siteUrl) return NextResponse.json({ error: 'Missing siteUrl' }, { status: 400 })
@@ -178,108 +179,102 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ siteId: site?.id, domain })
   }
 
-  // Process 1 article
+  // Xử lý 1 article
   const { articleUrl, siteUrl, siteId, preloadedEmails, dryRun } = body
   const hostDomain = (siteUrl || '').replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
 
-  const { data: existing } = await supabase.from('emails').select('address')
-  const emailSet = new Set((existing || []).map((e: any) => e.address.toLowerCase()))
-
   const logs: string[] = []
+  // found = emails hiển thị cho user review (dryRun + normal)
+  const found: { addr: string; src: string; name: string; domain: string; pos: string }[] = []
+  // saved = emails đã ghi vào DB (chỉ khi !dryRun)
   const saved: string[] = []
   let advertiserDomain = ''
   let advertiserName = ''
   let skipped = false
 
-  // Dùng emails đã extract từ RSS nếu có (không cần fetch thêm)
+  // Lấy emails đã có trong DB để tránh trùng (chỉ dùng cho !dryRun)
+  const { data: existing } = await supabase.from('emails').select('address')
+  const emailSet = new Set((existing || []).map((e: any) => e.address.toLowerCase()))
+
+  // Lấy emails từ RSS preloaded nếu có
   let rssEmails: string[] = preloadedEmails?.[articleUrl]?.emails || []
   advertiserName = preloadedEmails?.[articleUrl]?.title || ''
 
-  // Nếu RSS không có email → fetch article thật
+  // Nếu RSS không có → fetch article thật
   if (rssEmails.length === 0) {
     try {
       const text = await fetchArticle(articleUrl)
-      logs.push(`✓ Fetched article ${text.length} chars`)
+      logs.push(`✓ Fetched ${text.length} chars`)
       rssEmails = extractEmails(text, hostDomain)
-      logs.push(`  Regex found: ${rssEmails.length} email(s)`)
-
+      logs.push(`  Regex: ${rssEmails.length} email(s)`)
       // Detect non-crypto
       if (!isCrypto(text.slice(0, 3000)) && !isCrypto(advertiserName)) {
-        logs.push(`  ⊘ Non-crypto`)
+        logs.push(`  ⊘ Non-crypto, bỏ qua`)
         skipped = true
       }
     } catch (e: any) {
-      logs.push(`  ⚠ Fetch: ${e.message}`)
+      logs.push(`  ⚠ ${e.message}`)
+      skipped = true
     }
   } else {
-    logs.push(`✓ RSS preloaded: ${rssEmails.length} email(s) từ feed`)
-    if (!isCrypto(advertiserName) && !rssEmails.some(e => isCrypto(e))) {
-      // Vẫn tiếp tục — RSS emails thường là contact của dự án
-    }
+    logs.push(`✓ RSS preloaded: ${rssEmails.length} email(s)`)
   }
 
-  const foundEmails: {addr:string;src:string;name:string;domain:string;pos:string}[] = []
-
+  // Xử lý emails từ bài PR
   if (!skipped && rssEmails.length > 0) {
     for (const em of rssEmails) {
       const a = em.toLowerCase()
-      if (!a.includes(hostDomain.split('.')[0])) {
-        advertiserDomain = a.split('@')[1] || ''
-        const alreadyInDB = emailSet.has(a)
-        if (!alreadyInDB || dryRun) {
-          foundEmails.push({ addr: a, src: 'article', name: advertiserName||'', domain: advertiserDomain||hostDomain, pos: '' })
-        }
-        if (!dryRun && !alreadyInDB) {
-          await supabase.from('emails').insert({
-            address: a, source_url: articleUrl,
-            domain: advertiserDomain||hostDomain, status: 'new',
-            source_type: 'article', contact_name: advertiserName||null,
-          })
-          emailSet.add(a); saved.push(a)
-        }
-        logs.push(`  → [Bài] ${a}`)
+      if (a.includes(hostDomain.split('.')[0])) continue // bỏ email của chính site
+      advertiserDomain = a.split('@')[1] || ''
+      // Luôn add vào found (để user xem)
+      found.push({ addr: a, src: 'article', name: advertiserName, domain: advertiserDomain, pos: '' })
+      logs.push(`  → [Bài] ${a}`)
+      // Chỉ save DB khi không dryRun và chưa có
+      if (!dryRun && !emailSet.has(a)) {
+        await supabase.from('emails').insert({
+          address: a, source_url: articleUrl,
+          domain: advertiserDomain, status: 'new',
+          source_type: 'article', contact_name: advertiserName || null,
+        })
+        emailSet.add(a)
+        saved.push(a)
       }
     }
   }
 
-  // Hunter BOD với domain advertiser
+  // Hunter BOD
   if (!skipped && advertiserDomain && advertiserDomain !== hostDomain) {
     try {
-      const hunterR = await hunterBOD(advertiserDomain)
-      for (const h of hunterR) {
-        if (h.email) {
-          const alreadyH = emailSet.has(h.email)
-          if (!alreadyH || dryRun) {
-            foundEmails.push({ addr: h.email, src: 'hunter_bod', name: h.name||'', domain: advertiserDomain, pos: h.position||'' })
-          }
-          if (!dryRun && !alreadyH) {
-            await supabase.from('emails').insert({
-              address: h.email, source_url: articleUrl,
-              domain: advertiserDomain, status: 'new',
-              source_type: 'hunter_bod', contact_name: h.name||null, position: h.position||null,
-            })
-            emailSet.add(h.email)
-            saved.push(h.email)
-          }
-          logs.push(`  → [Hunter${isBOD(h.position) ? 'BOD👑' : ''}] ${h.email}`)
+      const hunterResults = await hunterBOD(advertiserDomain)
+      for (const h of hunterResults) {
+        if (!h.email) continue
+        const a = h.email.toLowerCase()
+        // Luôn add vào found (để user xem)
+        found.push({ addr: a, src: 'hunter_bod', name: h.name, domain: advertiserDomain, pos: h.position })
+        logs.push(`  → [Hunter${isBOD(h.position) ? 'BOD👑' : ''}] ${a} (${h.name})`)
+        // Chỉ save DB khi không dryRun và chưa có
+        if (!dryRun && !emailSet.has(a)) {
+          await supabase.from('emails').insert({
+            address: a, source_url: articleUrl,
+            domain: advertiserDomain, status: 'new',
+            source_type: 'hunter_bod', contact_name: h.name || null, position: h.position || null,
+          })
+          emailSet.add(a)
+          saved.push(a)
         }
       }
-    } catch {}
+    } catch { /* Hunter fail silently */ }
   }
 
-  // Ghi nhận đã quét
-  await supabase.from('crawled_pages').insert({
-    site_id: siteId,
-    page_url: articleUrl,
-    page_title: advertiserName || articleUrl.split('/').pop() || '',
-    emails_found: saved.length,
-  }).select()
-
-  if (siteId) {
+  // Ghi nhận đã quét (chỉ khi không dryRun)
+  if (!dryRun && siteId) {
+    await supabase.from('crawled_pages').insert({
+      site_id: siteId, page_url: articleUrl,
+      page_title: advertiserName || articleUrl.split('/').pop() || '',
+      emails_found: saved.length,
+    }).select()
     const { count } = await supabase
-      .from('crawled_pages')
-      .select('*', { count: 'exact', head: true })
-      .eq('site_id', siteId)
+      .from('crawled_pages').select('*', { count: 'exact', head: true }).eq('site_id', siteId)
     await supabase.from('competitor_sites').update({
       last_crawled_at: new Date().toISOString(),
       total_pages_crawled: count || 0,
@@ -287,5 +282,5 @@ export async function POST(req: NextRequest) {
     }).eq('id', siteId)
   }
 
-  return NextResponse.json({ saved, found: foundEmails, logs, advertiserName, advertiserDomain, skipped })
+  return NextResponse.json({ found, saved, logs, advertiserName, advertiserDomain, skipped })
 }
