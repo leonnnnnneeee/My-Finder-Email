@@ -25,8 +25,8 @@ async function sendViaResend(to: string, from: string, fromName: string, subject
   // Dùng onboarding@resend.dev (verified) hoặc RESEND_FROM_EMAIL nếu đã verify domain
   const senderEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
   const { error } = await resend.emails.send({
-    from: senderEmail.includes('@') ? senderEmail : `${fromName} <${senderEmail}>`,
-    reply_to: from,
+    from: `${fromName} <${senderEmail}>`,
+    replyTo: from,
     to,
     subject,
     html
