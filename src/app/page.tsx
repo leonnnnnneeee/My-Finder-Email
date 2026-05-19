@@ -833,19 +833,28 @@ export default function Page() {
             <button style={S.btn('sm')} onClick={checkSmtp}>🔌 Kiểm tra SMTP/Resend</button>
           </div>
 
-          {/* Email list tìm được */}
-          {emails.filter(e => e.status === 'new').length > 0 && (
+          {/* Email list - tất cả emails */}
+          {emails.length > 0 && (
             <div style={{ ...S.card(), marginBottom: 10 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: C.t2, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.06em' }}>
-                📬 Email sẽ được gửi ({emails.filter(e=>e.status==='new').length})
+              <div style={{ fontSize: 11, fontWeight: 600, color: C.t2, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.06em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>📬 Tất cả emails trong database ({emails.length})</span>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <span style={{ ...S.bdg(C.blueDim, C.cyan), fontSize: 10 }}>{emails.filter(e=>e.status==='new').length} chưa gửi</span>
+                  <span style={{ ...S.bdg('rgba(16,185,129,.15)', C.green), fontSize: 10 }}>{emails.filter(e=>e.status==='sent').length} đã gửi</span>
+                </div>
               </div>
-              <div style={{ background: C.b0, border: `1px solid ${C.bd}`, borderRadius: 8, maxHeight: 160, overflowY: 'auto' }}>
-                {emails.filter(e => e.status === 'new').map((e, i) => (
-                  <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', borderBottom: i < emails.filter(x=>x.status==='new').length-1 ? `1px solid ${C.bd}` : 'none' }}>
-                    <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, flex: 1 }}>{e.address}</span>
-                    <span style={{ fontSize: 10, color: C.t3 }}>{e.contact_name || e.domain}</span>
+              <div style={{ background: C.b0, border: `1px solid ${C.bd}`, borderRadius: 8, maxHeight: 240, overflowY: 'auto' }}>
+                {emails.map((e, i) => (
+                  <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', borderBottom: i < emails.length-1 ? `1px solid ${C.bd}` : 'none', opacity: e.status === 'sent' ? 0.5 : 1 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, fontWeight: 500 }}>{e.address}</div>
+                      <div style={{ fontSize: 10, color: C.t3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.contact_name || e.domain}</div>
+                    </div>
                     <span style={S.bdg(e.source_type === 'hunter_bod' ? C.amberDim : C.blueDim, e.source_type === 'hunter_bod' ? C.amber : C.cyan)}>
-                      {e.source_type === 'hunter_bod' ? 'BOD👑' : 'Bài viết'}
+                      {e.source_type === 'hunter_bod' ? 'BOD👑' : 'Bài PR'}
+                    </span>
+                    <span style={{ ...S.bdg(e.status==='sent' ? 'rgba(16,185,129,.15)' : e.status==='failed' ? 'rgba(239,68,68,.15)' : C.b3, e.status==='sent' ? C.green : e.status==='failed' ? '#ef4444' : C.t3), fontSize: 10 }}>
+                      {e.status === 'sent' ? '✓ Đã gửi' : e.status === 'failed' ? '✗ Lỗi' : '● Mới'}
                     </span>
                   </div>
                 ))}
