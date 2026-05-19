@@ -179,7 +179,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Process 1 article
-  const { articleUrl, siteUrl, siteId, preloadedEmails } = body
+  const { articleUrl, siteUrl, siteId, preloadedEmails, dryRun } = body
   const hostDomain = (siteUrl || '').replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
 
   const { data: existing } = await supabase.from('emails').select('address')
@@ -218,21 +218,22 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const foundEmails: {addr:string;src:string;name:string;domain:string;pos:string}[] = []
+
   if (!skipped && rssEmails.length > 0) {
     for (const em of rssEmails) {
       const a = em.toLowerCase()
       if (!emailSet.has(a) && !a.includes(hostDomain.split('.')[0])) {
         advertiserDomain = a.split('@')[1] || ''
-        await supabase.from('emails').insert({
-          address: a,
-          source_url: articleUrl,
-          domain: advertiserDomain || hostDomain,
-          status: 'new',
-          source_type: 'article',
-          contact_name: advertiserName || null,
-        })
-        emailSet.add(a)
-        saved.push(a)
+        foundEmails.push({ addr: a, src: 'article', name: advertiserName||'', domain: advertiserDomain||hostDomain, pos: '' })
+        if (!dryRun) {
+          await supabase.from('emails').insert({
+            address: a, source_url: articleUrl,
+            domain: advertiserDomain||hostDomain, status: 'new',
+            source_type: 'article', contact_name: advertiserName||null,
+          })
+          emailSet.add(a); saved.push(a)
+        }
         logs.push(`  → [Bài] ${a}`)
       }
     }
@@ -281,5 +282,5 @@ export async function POST(req: NextRequest) {
     }).eq('id', siteId)
   }
 
-  return NextResponse.json({ saved, logs, advertiserName, advertiserDomain, skipped })
+  return NextResponse.json({ saved, found: foundEmails, logs, advertiserName, advertiserDomain, skipped })
 }

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 type Email = { id: string; address: string; source_url?: string | null; domain?: string | null; status: 'new' | 'sent' | 'failed'; contact_name?: string; position?: string; confidence?: number; source_type?: string; created_at?: string }
 type Site = { id: string; url: string; domain: string; last_crawled_at?: string; total_pages_crawled: number; total_emails_found: number }
 type Log = { msg: string; t: 'info' | 'ok' | 'err' | 'dim' | 'warn' }
+type StagedEmail = { addr: string; src: string; name: string; domain: string; pos: string; articleUrl: string; articleTitle: string; checked: boolean }
 type Contact = { id: string; email: string; project: string; stage: string; seq: number; lastSent: string | null; opened: boolean; note: string }
 
 /* ─── Design tokens ─── */
@@ -154,6 +155,7 @@ export default function Page() {
   const [findLog, setFindLog] = useState<Log[]>([])
   const [hunterLog, setHunterLog] = useState<Log[]>([])
   const [crawlLog, setCrawlLog] = useState<Log[]>([])
+  const [stagedEmails, setStagedEmails] = useState<StagedEmail[]>([])
   const [sendLog, setSendLog] = useState<Log[]>([])
   const [remindLog, setRemindLog] = useState<Log[]>([])
   const [fp, setFp] = useState(0)
@@ -267,25 +269,21 @@ export default function Page() {
   }
 
   async function crawlSite(site: Site) {
-    setCrawlingSite(site.id); setCrawlLog([]); setCp(0)
+    setCrawlingSite(site.id); setCrawlLog([]); setCp(0); setStagedEmails([])
     addLog(setCrawlLog, `▶ Tìm bài PR/Sponsored trên ${site.domain}...`, 'info')
-    let totalNew = 0
     try {
-      // Bước 1: Upsert site + lấy siteId
       const initR = await fetch('/api/crawl-site', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: site.url }) })
       const initD = await initR.json()
       if (initD.error) { addLog(setCrawlLog, `✗ ${initD.error}`, 'err'); setCrawlingSite(null); return }
       const siteId = initD.siteId
-
-      // Bước 2: Generate URLs
       addLog(setCrawlLog, `  Đang tìm bài mới...`, 'dim')
       const urlsR = await fetch(`/api/crawl-site?action=urls&siteUrl=${encodeURIComponent(site.url)}`)
       const urlsD = await urlsR.json()
       const urls: string[] = urlsD.urls || []
+      const preloaded = urlsD.preloadedEmails || {}
       if (!urls.length) { addLog(setCrawlLog, `  — Không tìm thấy bài mới`, 'warn'); setCrawlingSite(null); loadSites(); return }
       addLog(setCrawlLog, `  → ${urls.length} bài cần quét`, 'info')
-
-      // Bước 3: Xử lý từng bài một (mỗi request ~8-10s)
+      const found: StagedEmail[] = []
       for (let i = 0; i < urls.length; i++) {
         const url = urls[i]
         setCp(Math.round((i + 1) / urls.length * 100))
@@ -295,22 +293,39 @@ export default function Page() {
           const artR = await fetch('/api/crawl-site', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ articleUrl: url, siteUrl: site.url, siteId })
+            body: JSON.stringify({ articleUrl: url, siteUrl: site.url, siteId, preloadedEmails: preloaded, dryRun: true })
           })
           const artD = await artR.json()
-          if (artD.skipped) { addLog(setCrawlLog, `     ⊘ Non-crypto bỏ qua`, 'dim'); continue }
+          if (artD.skipped) { addLog(setCrawlLog, `     ⊘ Non-crypto`, 'dim'); continue }
           artD.logs?.forEach((l: string) => addLog(setCrawlLog, `     ${l}`, l.includes('✓')||l.includes('→') ? 'ok' : 'dim'))
-          if (artD.saved?.length > 0) {
-            addLog(setCrawlLog, `     ✅ +${artD.saved.length} email: ${artD.saved.join(', ')}`, 'ok')
-            totalNew += artD.saved.length
+          if (artD.found?.length > 0) {
+            artD.found.forEach((e: any) => {
+              found.push({ addr: e.addr, src: e.src, name: e.name || '', domain: e.domain || '', pos: e.pos || '', articleUrl: url, articleTitle: artD.advertiserName || slug, checked: true })
+              addLog(setCrawlLog, `     📧 ${e.addr} [${e.src === 'hunter_bod' ? 'BOD👑' : 'Bài'}]`, 'ok')
+            })
+            setStagedEmails(p => [...p, ...artD.found.map((e: any) => ({ addr: e.addr, src: e.src, name: e.name||'', domain: e.domain||'', pos: e.pos||'', articleUrl: url, articleTitle: artD.advertiserName||slug, checked: true }))])
           }
-        } catch (e: any) {
-          addLog(setCrawlLog, `     ✗ ${e.message}`, 'err')
-        }
+        } catch (e: any) { addLog(setCrawlLog, `     ✗ ${e.message}`, 'err') }
       }
-      addLog(setCrawlLog, `\n─── Xong: ${urls.length} bài · +${totalNew} email mới ───`, totalNew > 0 ? 'ok' : 'dim')
+      addLog(setCrawlLog, `\n─── Tìm thấy ${found.length} email — chọn và nhấn Collect ───`, found.length > 0 ? 'ok' : 'dim')
     } catch (e: any) { addLog(setCrawlLog, `✗ ${e.message}`, 'err') }
-    setCrawlingSite(null); loadSites(); loadEmails()
+    setCrawlingSite(null); loadSites()
+  }
+
+  async function collectStaged() {
+    const selected = stagedEmails.filter(e => e.checked)
+    if (!selected.length) return alert('Chưa chọn email nào!')
+    let saved = 0
+    for (const e of selected) {
+      const r = await fetch('/api/emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: e.addr, domain: e.domain, source_url: e.articleUrl, source_type: e.src, contact_name: e.name||null, position: e.pos||null })
+      })
+      if ((await r.json()).ok) saved++
+    }
+    setStagedEmails([]); loadEmails()
+    alert(`✅ Đã collect ${saved}/${selected.length} email!`)
   }
 
   async function runAutoRemind() {
@@ -582,6 +597,46 @@ export default function Page() {
             )
           })}
           {crawlLog.length > 0 && <LogPane logs={crawlLog} pct={cp} />}
+
+          {/* Staging area — email tìm được, chọn trước khi collect */}
+          {stagedEmails.length > 0 && (
+            <div style={{ ...S.card(), marginTop: 12, border: `1px solid rgba(16,185,129,.35)`, background: 'rgba(16,185,129,.04)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <div>
+                  <span style={{ fontWeight: 600, fontSize: 13 }}>📬 Emails tìm được</span>
+                  <span style={{ fontSize: 11, color: C.t3, marginLeft: 8 }}>{stagedEmails.filter(e=>e.checked).length}/{stagedEmails.length} đã chọn</span>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button style={{ ...S.btn('sm'), background: C.b3, color: C.t2 }} onClick={() => setStagedEmails(p => p.map(e => ({ ...e, checked: !p.every(x=>x.checked) })))}>
+                    {stagedEmails.every(e=>e.checked) ? 'Bỏ chọn hết' : 'Chọn hết'}
+                  </button>
+                  <button style={{ ...S.btn('p'), background: C.green, fontSize: 12, padding: '6px 14px' }} onClick={collectStaged}>
+                    ✅ Collect {stagedEmails.filter(e=>e.checked).length} email
+                  </button>
+                </div>
+              </div>
+              <div style={{ background: C.b0, border: `1px solid ${C.bd}`, borderRadius: 8, overflow: 'hidden' }}>
+                {stagedEmails.map((e, i) => (
+                  <div key={e.addr+i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: i < stagedEmails.length-1 ? `1px solid ${C.bd}` : 'none', background: e.checked ? 'rgba(16,185,129,.06)' : 'transparent', cursor: 'pointer' }}
+                    onClick={() => setStagedEmails(p => p.map((x,j) => j===i ? {...x, checked: !x.checked} : x))}>
+                    <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${e.checked ? C.green : C.bd}`, background: e.checked ? C.green : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      {e.checked && <span style={{ color: '#fff', fontSize: 10, lineHeight: 1 }}>✓</span>}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 500 }}>{e.addr}</div>
+                      <div style={{ fontSize: 10, color: C.t3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.articleTitle}</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                      {e.name && <span style={{ fontSize: 10, color: C.t2 }}>{e.name}</span>}
+                      <span style={S.bdg(e.src==='hunter_bod' ? C.amberDim : C.blueDim, e.src==='hunter_bod' ? C.amber : C.cyan)}>
+                        {e.src==='hunter_bod' ? 'BOD 👑' : 'Bài PR'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>}
 
         {/* HUNTER */}
