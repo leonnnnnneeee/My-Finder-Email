@@ -22,7 +22,15 @@ async function notifyTelegram(sent: number, failed: number) {
 
 async function sendViaResend(to: string, from: string, fromName: string, subject: string, html: string) {
   const resend = new Resend(process.env.RESEND_API_KEY)
-  const { error } = await resend.emails.send({ from: `${fromName} <${from}>`, to, subject, html })
+  // Dùng onboarding@resend.dev (verified) hoặc RESEND_FROM_EMAIL nếu đã verify domain
+  const senderEmail = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
+  const { error } = await resend.emails.send({
+    from: senderEmail.includes('@') ? senderEmail : `${fromName} <${senderEmail}>`,
+    reply_to: from,
+    to,
+    subject,
+    html
+  })
   if (error) throw new Error(error.message)
 }
 
