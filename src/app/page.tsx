@@ -843,11 +843,16 @@ export default function Page() {
                   <span style={{ ...S.bdg('rgba(16,185,129,.15)', C.green), fontSize: 10 }}>{emails.filter(e=>e.status==='sent').length} đã gửi</span>
                 </div>
               </div>
-              <div style={{ background: C.b0, border: `1px solid ${C.bd}`, borderRadius: 8, maxHeight: 240, overflowY: 'auto' }}>
-                {emails.map((e, i) => (
-                  <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 12px', borderBottom: i < emails.length-1 ? `1px solid ${C.bd}` : 'none', opacity: e.status === 'sent' ? 0.5 : 1 }}>
+              <div style={{ background: C.b0, border: `1px solid ${C.bd}`, borderRadius: 8, maxHeight: 300, overflowY: 'auto' }}>
+                {emails.map((e, i) => {
+                  const project = e.contact_name?.split(' ').slice(0,3).join(' ') || e.domain?.split('.')[0] || 'Project'
+                  const gmailSubject = subject.replace(/\{\{project\}\}/g, project).replace(/\{\{email\}\}/g, e.address) || `Boost ${project} Visibility — Coincu PR & CMC Top News`
+                  const gmailBody = body.replace(/\{\{email\}\}/g, e.address).replace(/\{\{domain\}\}/g, e.domain||'').replace(/\{\{project\}\}/g, project).replace(/\{\{name\}\}/g, e.contact_name||'Team') || `Hi Team,\n\nI came across your recent press release and wanted to reach out.\n\nAt Coincu, we offer PR Distribution and CoinMarketCap Top News listing.\n\nTelegram: https://t.me/iamleonnn\n\nBest,\nLEON (Mr.)\nCBO — Coincu\nE: leon@coincu.com`
+                  const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(e.address)}&su=${encodeURIComponent(gmailSubject)}&body=${encodeURIComponent(gmailBody)}`
+                  return (
+                  <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: i < emails.length-1 ? `1px solid ${C.bd}` : 'none', opacity: e.status === 'sent' ? 0.6 : 1 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 11, fontWeight: 500 }}>{e.address}</div>
+                      <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 600 }}>{e.address}</div>
                       <div style={{ fontSize: 10, color: C.t3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.contact_name || e.domain}</div>
                     </div>
                     <span style={S.bdg(e.source_type === 'hunter_bod' ? C.amberDim : C.blueDim, e.source_type === 'hunter_bod' ? C.amber : C.cyan)}>
@@ -856,8 +861,17 @@ export default function Page() {
                     <span style={{ ...S.bdg(e.status==='sent' ? 'rgba(16,185,129,.15)' : e.status==='failed' ? 'rgba(239,68,68,.15)' : C.b3, e.status==='sent' ? C.green : e.status==='failed' ? '#ef4444' : C.t3), fontSize: 10 }}>
                       {e.status === 'sent' ? '✓ Đã gửi' : e.status === 'failed' ? '✗ Lỗi' : '● Mới'}
                     </span>
+                    <a href={gmailUrl} target="_blank" rel="noreferrer"
+                      style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, background: 'rgba(234,67,53,.15)', color: '#ea4335', border: '1px solid rgba(234,67,53,.3)', textDecoration: 'none', whiteSpace: 'nowrap', cursor: 'pointer', fontWeight: 600 }}
+                      onClick={async () => {
+                        if (e.status !== 'sent') {
+                          await fetch(`/api/emails/${e.id}`, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ status: 'sent', sent_at: new Date().toISOString() }) })
+                          loadEmails()
+                        }
+                      }}
+                    >📧 Gửi Gmail</a>
                   </div>
-                ))}
+                )})}
               </div>
             </div>
           )}
