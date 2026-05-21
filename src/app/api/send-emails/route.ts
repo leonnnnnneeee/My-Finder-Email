@@ -35,23 +35,30 @@ async function sendViaResend(to: string, from: string, fromName: string, subject
 }
 
 async function sendViaSMTP(to: string, from: string, fromName: string, subject: string, text: string, html: string) {
+  const host = process.env.SMTP_HOST || 'smtp-mail.outlook.com'
+  const port = Number(process.env.SMTP_PORT) || 587
+  const user = process.env.SMTP_USER || ''
+  const pass = process.env.SMTP_PASS || ''
   const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: Number(process.env.SMTP_PORT) || 587,
-    secure: false,
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    host, port, secure: false,
+    auth: { user, pass },
+    tls: { ciphers: 'SSLv3', rejectUnauthorized: false }
   })
-  await transporter.sendMail({ from: `"${fromName}" <${from}>`, to, subject, text, html })
+  await transporter.sendMail({
+    from: `"${fromName}" <${user}>`,
+    replyTo: from,
+    to, subject, text, html
+  })
 }
 
 export async function GET() {
   // Test SMTP/Resend connection
-  const hasResend = !!process.env.RESEND_API_KEY
   const hasSMTP = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
+  const hasResend = !!process.env.RESEND_API_KEY
   return NextResponse.json({
     resend: hasResend ? 'configured' : 'not set',
     smtp: hasSMTP ? 'configured' : 'not set',
-    provider: hasResend ? 'resend' : hasSMTP ? 'smtp' : 'none'
+    provider: hasSMTP ? 'smtp' : hasResend ? 'resend' : 'none'
   })
 }
 
@@ -70,10 +77,10 @@ export async function POST(req: NextRequest) {
 
     try {
       const htmlBody = (bodyText||'Test email from Coincu').replace(/\n/g, '<br>')
-      if (hasResend) {
-        await sendViaResend(testTo, fromEmail||'leon@coincu.com', fromName||'LEON', subject||'Test', htmlBody)
-      } else {
+      if (hasSMTP) {
         await sendViaSMTP(testTo, fromEmail||'leon@coincu.com', fromName||'LEON', subject||'Test', bodyText||'Test', htmlBody)
+      } else if (hasResend) {
+        await sendViaResend(testTo, fromEmail||'leon@coincu.com', fromName||'LEON', subject||'Test', htmlBody)
       }
       return NextResponse.json({ ok: true, provider: hasResend ? 'resend' : 'smtp' })
     } catch (e: any) {
@@ -86,8 +93,8 @@ export async function POST(req: NextRequest) {
   if (!fromName || !fromEmail || !subject || !bodyText)
     return NextResponse.json({ error: 'Thiếu thông tin: fromName, fromEmail, subject, body' }, { status: 400 })
 
-  const hasResend = !!process.env.RESEND_API_KEY
   const hasSMTP = !!(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
+  const hasResend = !!process.env.RESEND_API_KEY
   if (!hasResend && !hasSMTP)
     return NextResponse.json({ error: 'Chưa cấu hình SMTP hoặc RESEND_API_KEY' }, { status: 400 })
 
