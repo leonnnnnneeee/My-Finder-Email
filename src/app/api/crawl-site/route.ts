@@ -165,49 +165,46 @@ export async function GET(req: NextRequest) {
       }
       
       try {
-        if (domain === 'cryptorank.io') {
-          // Dùng RSS feed CryptoRank ICO/IDO
-          const feeds = [
-            'https://cryptorank.io/ico-calendar/rss',
-            'https://cryptorank.io/funding-rounds/rss',
-          ]
-          for (const feedUrl of feeds) {
-            try {
-              const r = await fetch(feedUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; FeedParser/1.0)' }, signal: AbortSignal.timeout(5000) })
-              if (r.ok) {
-                const xml = await r.text()
-                const linkRe = /<link>([^<]+)<\/link>/g
-                let m
-                while ((m = linkRe.exec(xml)) !== null) {
-                  const url = m[1].trim()
-                  if (url.includes('cryptorank.io/currencies/')) {
-                    const slug = url.split('/currencies/')[1]?.split('/')[0]
-                    if (slug) projectDomains.push(slug.replace(/-/g, '') + '.io')
-                  }
-                }
-              }
-            } catch {}
-          }
-          // Fallback: scrape trang web
-          if (projectDomains.length === 0) {
-            const r = await fetch('https://cryptorank.io/ico', { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' }, signal: AbortSignal.timeout(6000) })
+        if (domain === 'cryptorank.io' || domain === 'coinmarketcap.com') {
+          // Dùng CoinGecko public API - không bị block, không cần key
+          const BLOCKED = ['x.com','twitter.com','t.me','telegram','linkedin','discord','github','medium','reddit','youtube','facebook','instagram','coingecko','coinmarketcap','cryptorank','opensea','uniswap','pancakeswap','binance']
+          try {
+            // Lấy coins mới thêm gần đây
+            const r = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=gecko_desc&per_page=50&page=1&sparkline=false&price_change_percentage=24h', {
+              headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' },
+              signal: AbortSignal.timeout(8000)
+            })
             if (r.ok) {
-              const html = await r.text()
-              const websiteRe = /href=["'](https?:\/\/(?!cryptorank)[\w.-]+\.[\w]{2,})[/"']/g
-              let wm
+              const coins = await r.json()
               const seen = new Set<string>()
-              const BLOCKED_DOMAINS = ['x.com','twitter.com','t.me','telegram.org','linkedin.com','discord.com','discord.gg','github.com','medium.com','reddit.com','youtube.com','facebook.com','instagram.com','tiktok.com','google.com','apple.com','play.google.com','coinmarketcap.com','coingecko.com','cryptorank.io','opensea.io','uniswap.org']
-            while ((wm = websiteRe.exec(html)) !== null) {
-              const dom = wm[1].replace(/https?:\/\//, '').split('/')[0].replace('www.', '').toLowerCase()
-              if (dom && dom.includes('.') && !seen.has(dom) && !BLOCKED_DOMAINS.some(b => dom.includes(b))) {
-                seen.add(dom)
-                projectDomains.push(dom)
-                if (projectDomains.length >= 15) break
+              // Lấy top 10 coins và fetch website của từng cái
+              for (const coin of (coins || []).slice(0, 10)) {
+                try {
+                  const detailR = await fetch(
+                    `https://api.coingecko.com/api/v3/coins/${coin.id}?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false`,
+                    { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(4000) }
+                  )
+                  if (detailR.ok) {
+                    const detail = await detailR.json()
+                    const sites = [
+                      ...(detail.links?.homepage || []),
+                      ...(detail.links?.official_forum_url || [])
+                    ].filter((u: string) => u && u.startsWith('http'))
+                    for (const site of sites) {
+                      const dom = site.replace(/https?:\/\//, '').split('/')[0].replace('www.', '').toLowerCase()
+                      if (dom && dom.includes('.') && !seen.has(dom) && !BLOCKED.some(b => dom.includes(b))) {
+                        seen.add(dom)
+                        projectDomains.push(dom)
+                      }
+                    }
+                  }
+                  await new Promise(res => setTimeout(res, 500)) // Rate limit
+                } catch {}
+                if (projectDomains.length >= 10) break
               }
             }
-            }
-          }
-        } else if (domain === 'coinmarketcap.com') {
+          } catch (e: any) { listingErrors.push('CoinGecko: ' + e.message) }
+        } else if (domain === 'coinmarketcap.com_disabled') {        } else if (domain === 'coinmarketcap.com') {
           // Dùng CoinGecko API public thay CMC (không bị block)
           const r = await fetch('https://api.coingecko.com/api/v3/coins/list?include_platform=false', {
             headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' },
