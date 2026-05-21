@@ -216,19 +216,18 @@ export async function GET(req: NextRequest) {
               })
               if (rssR.ok) {
                 const xml = await rssR.text()
-                const BLOCKED2 = ['crunchbase','google','apple','twitter','x.com','linkedin','facebook','medium','substack','techcrunch','bloomberg','reuters','wsj','nytimes','forbes','venturebeat']
-                const linkRe = /<link>([^<]+)<\/link>/g
-                const descRe = /href=["'](https?:\/\/[\w.-]+\.[\w]{2,}[^"' ]*)/g
+                const BLOCKED2 = ['crunchbase','google','apple','twitter','x.com','t.me','telegram','linkedin','facebook','medium','substack','techcrunch','bloomberg','reuters','wsj','nytimes','forbes','venturebeat','linktr.ee','linktree','beacons','bio.link','carrd','wix.com','wordpress','squarespace','webflow','notion.so','discord','github','youtube','instagram','tiktok','reddit','opensea','uniswap','coingecko','coinmarketcap','binance','cdn.','app.','docs.','blog.','api.','mail.','shop.','store.']
+                // Parse từ cả link và description của RSS
+                const allUrlRe = /https?:\/\/([\w.-]+\.[\w]{2,})/g
                 let m
                 const seen2 = new Set<string>()
-                const xmlText = xml
-                while ((m = linkRe.exec(xmlText)) !== null) {
-                  const url = m[1].trim()
-                  if (url.startsWith('http') && !url.includes('crunchbase')) {
-                    const dom = url.replace(/https?:\/\//, '').split('/')[0].replace('www.', '').toLowerCase()
-                    if (dom && dom.includes('.') && !seen2.has(dom) && !BLOCKED2.some(b => dom.includes(b))) {
-                      seen2.add(dom); projectDomains.push(dom)
-                    }
+                while ((m = allUrlRe.exec(xml)) !== null) {
+                  const dom = m[1].replace(/^www\./, '').toLowerCase()
+                  const parts = dom.split('.')
+                  if (dom && dom.includes('.') && !seen2.has(dom) && !BLOCKED2.some(b => dom.includes(b)) && parts.length >= 2 && parts[parts.length-1].length >= 2 && dom.length < 40) {
+                    seen2.add(dom)
+                    projectDomains.push(dom)
+                    if (projectDomains.length >= 10) break
                   }
                 }
               }
