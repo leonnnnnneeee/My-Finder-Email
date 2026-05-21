@@ -40,10 +40,12 @@ async function sendViaSMTP(to: string, from: string, fromName: string, subject: 
   const user = process.env.SMTP_USER || ''
   const pass = process.env.SMTP_PASS || ''
   const transporter = nodemailer.createTransport({
-    host, port, secure: false,
+    host, port,
+    secure: port === 465,
     auth: { user, pass },
-    tls: { ciphers: 'SSLv3', rejectUnauthorized: false }
+    tls: { rejectUnauthorized: false }
   })
+  await transporter.verify()
   await transporter.sendMail({
     from: `"${fromName}" <${user}>`,
     replyTo: from,
