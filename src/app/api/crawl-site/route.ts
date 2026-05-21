@@ -150,6 +150,63 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Special handling for listing sites - use Hunter.io to find emails from new projects
+    const LISTING_SITES = ['cryptorank.io', 'coinmarketcap.com', 'crunchbase.com']
+    if (LISTING_SITES.includes(domain)) {
+      // Fetch newly listed projects from their API/RSS
+      const projectDomains: string[] = []
+      const listingErrors: string[] = []
+      
+      const listingFeeds: Record<string, string> = {
+        'cryptorank.io': 'https://cryptorank.io/api/v1/currencies?limit=20&sortBy=addedAt&sortDirection=desc',
+        'coinmarketcap.com': 'https://api.coinmarketcap.com/data-api/v3/cryptocurrency/listing/recent?limit=20',
+        'crunchbase.com': 'https://news.crunchbase.com/feed/',
+      }
+      
+      try {
+        if (domain === 'cryptorank.io') {
+          const r = await fetch('https://cryptorank.io/api/v1/currencies?limit=20&sortBy=addedAt&sortDirection=desc', {
+            headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(5000)
+          })
+          if (r.ok) {
+            const d = await r.json()
+            const projects = d.data || []
+            for (const p of projects.slice(0, 15)) {
+              if (p.links?.website) {
+                const dom = p.links.website.replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
+                if (dom && dom.includes('.')) projectDomains.push(dom)
+              }
+            }
+          }
+        } else if (domain === 'coinmarketcap.com') {
+          const r = await fetch('https://api.coinmarketcap.com/data-api/v3/cryptocurrency/listing/recent?limit=20', {
+            headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(5000)
+          })
+          if (r.ok) {
+            const d = await r.json()
+            const projects = d.data?.recentlyAdded || []
+            for (const p of projects.slice(0, 15)) {
+              if (p.urls?.website?.length > 0) {
+                const dom = p.urls.website[0].replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
+                if (dom && dom.includes('.')) projectDomains.push(dom)
+              }
+            }
+          }
+        }
+      } catch (e: any) {
+        listingErrors.push(e.message)
+      }
+      
+      // Use project domains as "URLs" - will be processed by Hunter.io in POST
+      const syntheticUrls = projectDomains.map(d => `hunter://${d}`)
+      const preloaded: Record<string, {title: string; emails: string[]}> = {}
+      for (const d of projectDomains) {
+        preloaded[`hunter://${d}`] = { title: d.split('.')[0], emails: [] }
+      }
+      
+      return NextResponse.json({ urls: syntheticUrls, domain, errors: listingErrors, preloadedEmails: preloaded, isListingSite: true })
+    }
+
     const urls = [...articleMap.keys()].slice(0, 10)
     const preloadedEmails = Object.fromEntries(articleMap)
     return NextResponse.json({ urls, domain, errors, preloadedEmails })
@@ -182,6 +239,45 @@ export async function POST(req: NextRequest) {
   // Xử lý 1 article
   const { articleUrl, siteUrl, siteId, preloadedEmails, dryRun } = body
   const hostDomain = (siteUrl || '').replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
+
+  // Special: Hunter-only mode for listing sites (cryptorank, CMC)
+  if (articleUrl?.startsWith('hunter://')) {
+    const targetDomain = articleUrl.replace('hunter://', '')
+    const projectName = preloadedEmails?.[articleUrl]?.title || targetDomain.split('.')[0]
+    const found: { addr: string; src: string; name: string; domain: string; pos: string }[] = []
+    const logs: string[] = [`🎯 Hunter search: ${targetDomain}`]
+    
+    try {
+      const hunterResults = await hunterBOD(targetDomain)
+      const { data: existing } = await supabase.from('emails').select('address')
+      const emailSet = new Set((existing || []).map((e: any) => e.address.toLowerCase()))
+      
+      for (const h of hunterResults) {
+        if (!h.email) continue
+        found.push({ addr: h.email, src: 'hunter_bod', name: h.name, domain: targetDomain, pos: h.position })
+        logs.push(`  → [Hunter${isBOD(h.position) ? 'BOD👑' : ''}] ${h.email} (${h.name})`)
+        if (!dryRun && !emailSet.has(h.email)) {
+          await supabase.from('emails').insert({
+            address: h.email, source_url: `https://${targetDomain}`,
+            domain: targetDomain, status: 'new',
+            source_type: 'hunter_bod', contact_name: h.name || null, position: h.position || null,
+          })
+        }
+      }
+      if (hunterResults.length === 0) logs.push('  — No emails found')
+    } catch (e: any) {
+      logs.push(`  ⚠ ${e.message}`)
+    }
+
+    if (!dryRun && siteId) {
+      await supabase.from('crawled_pages').insert({
+        site_id: siteId, page_url: articleUrl,
+        page_title: projectName, emails_found: found.length,
+      }).select()
+    }
+
+    return NextResponse.json({ found, saved: dryRun ? [] : found.map(f => f.addr), logs, advertiserName: projectName, advertiserDomain: targetDomain, skipped: false })
+  }
 
   const logs: string[] = []
   // found = emails hiển thị cho user review (dryRun + normal)
