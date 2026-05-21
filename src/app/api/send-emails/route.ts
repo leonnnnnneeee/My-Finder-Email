@@ -126,10 +126,10 @@ export async function POST(req: NextRequest) {
     let errorMsg = null
 
     try {
-      if (hasResend) {
-        await sendViaResend(email.address, fromEmail, fromName, personalisedSubject, htmlBody)
-      } else {
+      if (hasSMTP) {
         await sendViaSMTP(email.address, fromEmail, fromName, personalisedSubject, personalised, htmlBody)
+      } else if (hasResend) {
+        await sendViaResend(email.address, fromEmail, fromName, personalisedSubject, htmlBody)
       }
       await supabase.from('emails').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', email.id)
     } catch (err: any) {
