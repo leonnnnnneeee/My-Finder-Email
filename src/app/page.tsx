@@ -286,8 +286,9 @@ export default function Page() {
       for (let i = 0; i < urls.length; i++) {
         const url = urls[i]
         setCp(Math.round((i + 1) / urls.length * 100))
-        const slug = url.replace(/https?:\/\/[^/]+/, '').slice(0, 60)
-        addLog(setCrawlLog, `\n  📄 ${slug}`, 'info')
+        const isHunter = url.startsWith('hunter://')
+        const slug = isHunter ? `🎯 Hunter: ${url.replace('hunter://', '')}` : url.replace(/https?:\/\/[^/]+/, '').slice(0, 60)
+        addLog(setCrawlLog, `\n  ${isHunter ? '🏢' : '📄'} ${slug}`, 'info')
         try {
           const artD = await fetch('/api/crawl-site', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
