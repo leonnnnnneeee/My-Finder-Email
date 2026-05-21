@@ -165,10 +165,10 @@ export async function GET(req: NextRequest) {
       }
       
       try {
-        const cgPage = domain === 'coinmarketcap.com' ? '5' : domain === 'crunchbase.com' ? '7' : '3'
+        const cgPage = domain === 'coinmarketcap.com' ? '5' : '3' // crunchbase uses RSS below
         if (domain === 'cryptorank.io' || domain === 'coinmarketcap.com' || domain === 'crunchbase.com') {
           // Dùng CoinGecko public API - không bị block, không cần key
-          const BLOCKED = ['x.com','twitter.com','t.me','telegram','linkedin','discord','github','medium','reddit','youtube','facebook','instagram','coingecko','coinmarketcap','cryptorank','opensea','uniswap','pancakeswap','binance']
+          const BLOCKED = ['x.com','twitter.com','t.me','telegram','linkedin','discord','github','medium','reddit','youtube','facebook','instagram','coingecko','coinmarketcap','cryptorank','opensea','uniswap','pancakeswap','binance','linktr.ee','linktree','beacons.ai','bio.link','carrd.co','wix.com','wordpress.com','squarespace','weebly','webflow','notion.so','docs.google','forms.gle','typeform','app.','cdn.','api.','docs.','blog.']
           try {
             // Lấy coins nhỏ/mới - page 3+ với volume_asc để lấy coins ít biết đến
             const r = await fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=volume_asc&per_page=50&page=${cgPage}&sparkline=false`, {
@@ -205,6 +205,35 @@ export async function GET(req: NextRequest) {
               }
             }
           } catch (e: any) { listingErrors.push('CoinGecko: ' + e.message) }
+          
+          // Crunchbase: dùng RSS feed thật thay CoinGecko
+          if (domain === 'crunchbase.com') {
+            projectDomains.length = 0 // Reset, dùng RSS thay
+            try {
+              const rssR = await fetch('https://news.crunchbase.com/feed/', {
+                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; FeedParser/1.0)', 'Accept': 'application/rss+xml, */*' },
+                signal: AbortSignal.timeout(6000)
+              })
+              if (rssR.ok) {
+                const xml = await rssR.text()
+                const BLOCKED2 = ['crunchbase','google','apple','twitter','x.com','linkedin','facebook','medium','substack','techcrunch','bloomberg','reuters','wsj','nytimes','forbes','venturebeat']
+                const linkRe = /<link>([^<]+)<\/link>/g
+                const descRe = /href=["'](https?:\/\/[\w.-]+\.[\w]{2,}[^"' ]*)/g
+                let m
+                const seen2 = new Set<string>()
+                const xmlText = xml
+                while ((m = linkRe.exec(xmlText)) !== null) {
+                  const url = m[1].trim()
+                  if (url.startsWith('http') && !url.includes('crunchbase')) {
+                    const dom = url.replace(/https?:\/\//, '').split('/')[0].replace('www.', '').toLowerCase()
+                    if (dom && dom.includes('.') && !seen2.has(dom) && !BLOCKED2.some(b => dom.includes(b))) {
+                      seen2.add(dom); projectDomains.push(dom)
+                    }
+                  }
+                }
+              }
+            } catch (e: any) { listingErrors.push('Crunchbase RSS: ' + e.message) }
+          }
         } else if (false) { // disabled
           // Dùng CoinGecko API public thay CMC (không bị block)
           const r = await fetch('https://api.coingecko.com/api/v3/coins/list?include_platform=false', {
