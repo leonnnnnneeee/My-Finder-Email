@@ -195,31 +195,50 @@ export async function GET(req: NextRequest) {
               const websiteRe = /href=["'](https?:\/\/(?!cryptorank)[\w.-]+\.[\w]{2,})[/"']/g
               let wm
               const seen = new Set<string>()
-              while ((wm = websiteRe.exec(html)) !== null) {
-                const dom = wm[1].replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
-                if (dom && dom.includes('.') && !seen.has(dom) && !dom.includes('cryptorank') && !dom.includes('google') && !dom.includes('twitter')) {
-                  seen.add(dom)
-                  projectDomains.push(dom)
-                  if (projectDomains.length >= 15) break
-                }
-              }
-            }
-          }
-        } else if (domain === 'coinmarketcap.com') {
-          // Scrape trang newly added từ CMC
-          const r = await fetch('https://coinmarketcap.com/new/', { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' }, signal: AbortSignal.timeout(6000) })
-          if (r.ok) {
-            const html = await r.text()
-            // Extract website links từ CMC new listings
-            const websiteRe = /\"website\":\"(https?:\/\/(?!coinmarketcap)[\w.-]+\.[\w]{2,})[\/"]/g
-            let wm
-            const seen = new Set<string>()
+              const BLOCKED_DOMAINS = ['x.com','twitter.com','t.me','telegram.org','linkedin.com','discord.com','discord.gg','github.com','medium.com','reddit.com','youtube.com','facebook.com','instagram.com','tiktok.com','google.com','apple.com','play.google.com','coinmarketcap.com','coingecko.com','cryptorank.io','opensea.io','uniswap.org']
             while ((wm = websiteRe.exec(html)) !== null) {
-              const dom = wm[1].replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
-              if (dom && dom.includes('.') && !seen.has(dom)) {
+              const dom = wm[1].replace(/https?:\/\//, '').split('/')[0].replace('www.', '').toLowerCase()
+              if (dom && dom.includes('.') && !seen.has(dom) && !BLOCKED_DOMAINS.some(b => dom.includes(b))) {
                 seen.add(dom)
                 projectDomains.push(dom)
                 if (projectDomains.length >= 15) break
+              }
+            }
+            }
+          }
+        } else if (domain === 'coinmarketcap.com') {
+          // Dùng CoinGecko API public thay CMC (không bị block)
+          const r = await fetch('https://api.coingecko.com/api/v3/coins/list?include_platform=false', {
+            headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(6000)
+          })
+          // Fallback: dùng CoinGecko recently added
+          const r2 = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=id_desc&per_page=20&page=1&sparkline=false', {
+            headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(6000)
+          })
+          if (r2.ok) {
+            const coins = await r2.json()
+            const BLOCKED = ['x.com','t.me','twitter.com','linkedin.com','discord','github','medium','reddit','youtube','telegram','coingecko','coinmarketcap']
+            for (const coin of (coins || []).slice(0, 20)) {
+              if (coin.id) {
+                // Fetch coin details to get website
+                try {
+                  const detailR = await fetch(`https://api.coingecko.com/api/v3/coins/${coin.id}?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false`, {
+                    headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(4000)
+                  })
+                  if (detailR.ok) {
+                    const detail = await detailR.json()
+                    const websites = detail.links?.homepage?.filter((u: string) => u && u.startsWith('http')) || []
+                    for (const site of websites) {
+                      const dom = site.replace(/https?:\/\//, '').split('/')[0].replace('www.', '').toLowerCase()
+                      if (dom && dom.includes('.') && !BLOCKED.some(b => dom.includes(b)) && projectDomains.length < 15) {
+                        projectDomains.push(dom)
+                      }
+                    }
+                  }
+                } catch {}
+                if (projectDomains.length >= 5) break // Giới hạn để tránh rate limit
               }
             }
           }
