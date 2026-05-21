@@ -169,8 +169,8 @@ export async function GET(req: NextRequest) {
           // Dùng CoinGecko public API - không bị block, không cần key
           const BLOCKED = ['x.com','twitter.com','t.me','telegram','linkedin','discord','github','medium','reddit','youtube','facebook','instagram','coingecko','coinmarketcap','cryptorank','opensea','uniswap','pancakeswap','binance']
           try {
-            // Lấy coins mới thêm gần đây
-            const r = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=gecko_desc&per_page=50&page=1&sparkline=false&price_change_percentage=24h', {
+            // Lấy coins nhỏ/mới - page 3+ với volume_asc để lấy coins ít biết đến
+            const r = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=volume_asc&per_page=50&page=3&sparkline=false', {
               headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' },
               signal: AbortSignal.timeout(8000)
             })
