@@ -165,29 +165,75 @@ export async function GET(req: NextRequest) {
       
       try {
         if (domain === 'cryptorank.io') {
-          const r = await fetch('https://cryptorank.io/api/v1/currencies?limit=20&sortBy=addedAt&sortDirection=desc', {
-            headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(5000)
-          })
-          if (r.ok) {
-            const d = await r.json()
-            const projects = d.data || []
-            for (const p of projects.slice(0, 15)) {
-              if (p.links?.website) {
-                const dom = p.links.website.replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
-                if (dom && dom.includes('.')) projectDomains.push(dom)
+          // Dùng RSS feed CryptoRank ICO/IDO
+          const feeds = [
+            'https://cryptorank.io/ico-calendar/rss',
+            'https://cryptorank.io/funding-rounds/rss',
+          ]
+          for (const feedUrl of feeds) {
+            try {
+              const r = await fetch(feedUrl, { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; FeedParser/1.0)' }, signal: AbortSignal.timeout(5000) })
+              if (r.ok) {
+                const xml = await r.text()
+                const linkRe = /<link>([^<]+)<\/link>/g
+                let m
+                while ((m = linkRe.exec(xml)) !== null) {
+                  const url = m[1].trim()
+                  if (url.includes('cryptorank.io/currencies/')) {
+                    const slug = url.split('/currencies/')[1]?.split('/')[0]
+                    if (slug) projectDomains.push(slug.replace(/-/g, '') + '.io')
+                  }
+                }
+              }
+            } catch {}
+          }
+          // Fallback: scrape trang web
+          if (projectDomains.length === 0) {
+            const r = await fetch('https://cryptorank.io/ico', { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' }, signal: AbortSignal.timeout(6000) })
+            if (r.ok) {
+              const html = await r.text()
+              const websiteRe = /href=["'](https?:\/\/(?!cryptorank)[\w.-]+\.[\w]{2,})[/"']/g
+              let wm
+              const seen = new Set<string>()
+              while ((wm = websiteRe.exec(html)) !== null) {
+                const dom = wm[1].replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
+                if (dom && dom.includes('.') && !seen.has(dom) && !dom.includes('cryptorank') && !dom.includes('google') && !dom.includes('twitter')) {
+                  seen.add(dom)
+                  projectDomains.push(dom)
+                  if (projectDomains.length >= 15) break
+                }
               }
             }
           }
         } else if (domain === 'coinmarketcap.com') {
-          const r = await fetch('https://api.coinmarketcap.com/data-api/v3/cryptocurrency/listing/recent?limit=20', {
-            headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(5000)
-          })
+          // Scrape trang newly added từ CMC
+          const r = await fetch('https://coinmarketcap.com/new/', { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' }, signal: AbortSignal.timeout(6000) })
           if (r.ok) {
-            const d = await r.json()
-            const projects = d.data?.recentlyAdded || []
-            for (const p of projects.slice(0, 15)) {
-              if (p.urls?.website?.length > 0) {
-                const dom = p.urls.website[0].replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
+            const html = await r.text()
+            // Extract website links từ CMC new listings
+            const websiteRe = /\"website\":\"(https?:\/\/(?!coinmarketcap)[\w.-]+\.[\w]{2,})[\/"]/g
+            let wm
+            const seen = new Set<string>()
+            while ((wm = websiteRe.exec(html)) !== null) {
+              const dom = wm[1].replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
+              if (dom && dom.includes('.') && !seen.has(dom)) {
+                seen.add(dom)
+                projectDomains.push(dom)
+                if (projectDomains.length >= 15) break
+              }
+            }
+          }
+        } else if (domain === 'crunchbase.com') {
+          // Scrape Crunchbase news RSS
+          const r = await fetch('https://news.crunchbase.com/feed/', { headers: { 'User-Agent': 'Mozilla/5.0 (compatible; FeedParser/1.0)' }, signal: AbortSignal.timeout(6000) })
+          if (r.ok) {
+            const xml = await r.text()
+            const linkRe = /<link>([^<]+)<\/link>/g
+            let m
+            while ((m = linkRe.exec(xml)) !== null) {
+              const url = m[1].trim()
+              if (url.startsWith('https://') && !url.includes('crunchbase')) {
+                const dom = url.replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
                 if (dom && dom.includes('.')) projectDomains.push(dom)
               }
             }
