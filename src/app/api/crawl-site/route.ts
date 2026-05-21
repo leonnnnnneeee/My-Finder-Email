@@ -206,32 +206,37 @@ export async function GET(req: NextRequest) {
             }
           } catch (e: any) { listingErrors.push('CoinGecko: ' + e.message) }
           
-          // Crunchbase: dùng RSS feed thật thay CoinGecko
+          // Crunchbase: dùng CoinGecko trending coins
           if (domain === 'crunchbase.com') {
-            projectDomains.length = 0 // Reset, dùng RSS thay
             try {
-              const rssR = await fetch('https://news.crunchbase.com/feed/', {
-                headers: { 'User-Agent': 'Mozilla/5.0 (compatible; FeedParser/1.0)', 'Accept': 'application/rss+xml, */*' },
-                signal: AbortSignal.timeout(6000)
+              const trendR = await fetch('https://api.coingecko.com/api/v3/search/trending', {
+                headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(6000)
               })
-              if (rssR.ok) {
-                const xml = await rssR.text()
-                const BLOCKED2 = ['crunchbase','google','apple','twitter','x.com','t.me','telegram','linkedin','facebook','medium','substack','techcrunch','bloomberg','reuters','wsj','nytimes','forbes','venturebeat','linktr.ee','linktree','beacons','bio.link','carrd','wix.com','wordpress','squarespace','webflow','notion.so','discord','github','youtube','instagram','tiktok','reddit','opensea','uniswap','coingecko','coinmarketcap','binance','cdn.','app.','docs.','blog.','api.','mail.','shop.','store.']
-                // Parse từ cả link và description của RSS
-                const allUrlRe = /https?:\/\/([\w.-]+\.[\w]{2,})/g
-                let m
-                const seen2 = new Set<string>()
-                while ((m = allUrlRe.exec(xml)) !== null) {
-                  const dom = m[1].replace(/^www\./, '').toLowerCase()
-                  const parts = dom.split('.')
-                  if (dom && dom.includes('.') && !seen2.has(dom) && !BLOCKED2.some(b => dom.includes(b)) && parts.length >= 2 && parts[parts.length-1].length >= 2 && dom.length < 40) {
-                    seen2.add(dom)
-                    projectDomains.push(dom)
-                    if (projectDomains.length >= 10) break
-                  }
+              if (trendR.ok) {
+                const trendData = await trendR.json()
+                const trending = trendData.coins?.map((c: any) => c.item?.id) || []
+                const BLOCKED_T = ['x.com','twitter','t.me','telegram','linkedin','discord','github','medium','reddit','youtube','facebook','instagram','linktr.ee','linktree','coingecko','coinmarketcap','binance','cdn.','app.','docs.']
+                for (const coinId of trending.slice(0, 10)) {
+                  try {
+                    const detR = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false`, {
+                      headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(4000)
+                    })
+                    if (detR.ok) {
+                      const det = await detR.json()
+                      for (const site of (det.links?.homepage || [])) {
+                        if (!site || !site.startsWith('http')) continue
+                        const dom = site.replace(/https?:\/\//, '').split('/')[0].replace('www.', '').toLowerCase()
+                        if (dom && dom.includes('.') && !BLOCKED_T.some(b => dom.includes(b)) && dom.length < 40 && !projectDomains.includes(dom)) {
+                          projectDomains.push(dom)
+                        }
+                      }
+                    }
+                    await new Promise(r => setTimeout(r, 300))
+                  } catch {}
+                  if (projectDomains.length >= 8) break
                 }
               }
-            } catch (e: any) { listingErrors.push('Crunchbase RSS: ' + e.message) }
+            } catch (e: any) { listingErrors.push('Crunchbase trending: ' + e.message) }
           }
         } else if (false) { // disabled
           // Dùng CoinGecko API public thay CMC (không bị block)
