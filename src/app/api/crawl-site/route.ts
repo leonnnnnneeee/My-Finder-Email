@@ -165,12 +165,13 @@ export async function GET(req: NextRequest) {
       }
       
       try {
-        if (domain === 'cryptorank.io' || domain === 'coinmarketcap.com') {
+        const cgPage = domain === 'coinmarketcap.com' ? '5' : domain === 'crunchbase.com' ? '7' : '3'
+        if (domain === 'cryptorank.io' || domain === 'coinmarketcap.com' || domain === 'crunchbase.com') {
           // Dùng CoinGecko public API - không bị block, không cần key
           const BLOCKED = ['x.com','twitter.com','t.me','telegram','linkedin','discord','github','medium','reddit','youtube','facebook','instagram','coingecko','coinmarketcap','cryptorank','opensea','uniswap','pancakeswap','binance']
           try {
             // Lấy coins nhỏ/mới - page 3+ với volume_asc để lấy coins ít biết đến
-            const r = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=volume_asc&per_page=50&page=3&sparkline=false', {
+            const r = await fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=volume_asc&per_page=50&page=${cgPage}&sparkline=false`, {
               headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' },
               signal: AbortSignal.timeout(8000)
             })
@@ -204,7 +205,7 @@ export async function GET(req: NextRequest) {
               }
             }
           } catch (e: any) { listingErrors.push('CoinGecko: ' + e.message) }
-        } else if (domain === 'coinmarketcap.com_disabled') {        } else if (domain === 'coinmarketcap.com') {
+        } else if (false) { // disabled
           // Dùng CoinGecko API public thay CMC (không bị block)
           const r = await fetch('https://api.coingecko.com/api/v3/coins/list?include_platform=false', {
             headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json' },
