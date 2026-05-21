@@ -165,7 +165,7 @@ export async function GET(req: NextRequest) {
       }
       
       try {
-        const cgPage = domain === 'coinmarketcap.com' ? '5' : '3' // crunchbase uses RSS below
+        const cgPage = domain === 'coinmarketcap.com' ? '5' : domain === 'crunchbase.com' ? '4' : '3'
         if (domain === 'cryptorank.io' || domain === 'coinmarketcap.com' || domain === 'crunchbase.com') {
           // Dùng CoinGecko public API - không bị block, không cần key
           const BLOCKED = ['x.com','twitter.com','t.me','telegram','linkedin','discord','github','medium','reddit','youtube','facebook','instagram','coingecko','coinmarketcap','cryptorank','opensea','uniswap','pancakeswap','binance','linktr.ee','linktree','beacons.ai','bio.link','carrd.co','wix.com','wordpress.com','squarespace','weebly','webflow','notion.so','docs.google','forms.gle','typeform','app.','cdn.','api.','docs.','blog.']
@@ -206,37 +206,11 @@ export async function GET(req: NextRequest) {
             }
           } catch (e: any) { listingErrors.push('CoinGecko: ' + e.message) }
           
-          // Crunchbase: dùng CoinGecko trending coins
+          // Crunchbase: dùng CoinGecko page 7 với filter tld crypto
           if (domain === 'crunchbase.com') {
-            try {
-              const trendR = await fetch('https://api.coingecko.com/api/v3/search/trending', {
-                headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(6000)
-              })
-              if (trendR.ok) {
-                const trendData = await trendR.json()
-                const trending = trendData.coins?.map((c: any) => c.item?.id) || []
-                const BLOCKED_T = ['x.com','twitter','t.me','telegram','linkedin','discord','github','medium','reddit','youtube','facebook','instagram','linktr.ee','linktree','coingecko','coinmarketcap','binance','cdn.','app.','docs.']
-                for (const coinId of trending.slice(0, 10)) {
-                  try {
-                    const detR = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}?localization=false&tickers=false&market_data=false&community_data=false&developer_data=false`, {
-                      headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(4000)
-                    })
-                    if (detR.ok) {
-                      const det = await detR.json()
-                      for (const site of (det.links?.homepage || [])) {
-                        if (!site || !site.startsWith('http')) continue
-                        const dom = site.replace(/https?:\/\//, '').split('/')[0].replace('www.', '').toLowerCase()
-                        if (dom && dom.includes('.') && !BLOCKED_T.some(b => dom.includes(b)) && dom.length < 40 && !projectDomains.includes(dom)) {
-                          projectDomains.push(dom)
-                        }
-                      }
-                    }
-                    await new Promise(r => setTimeout(r, 300))
-                  } catch {}
-                  if (projectDomains.length >= 8) break
-                }
-              }
-            } catch (e: any) { listingErrors.push('Crunchbase trending: ' + e.message) }
+            // Chỉ giữ domain có TLD thường dùng cho crypto projects
+            const CRYPTO_TLDS = ['.io','.xyz','.finance','.ai','.network','.protocol','.exchange','.money','.fund','.capital','.tech','.app','.pro','.global','.one','.org','.co']
+            projectDomains.splice(0, projectDomains.length, ...projectDomains.filter(d => CRYPTO_TLDS.some(t => d.endsWith(t))))
           }
         } else if (false) { // disabled
           // Dùng CoinGecko API public thay CMC (không bị block)
