@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
       } else if (hasResend) {
         await sendViaResend(testTo, fromEmail||'leon@coincu.com', fromName||'LEON', subject||'Test', htmlBody)
       }
-      return NextResponse.json({ ok: true, provider: hasResend ? 'resend' : 'smtp' })
+      return NextResponse.json({ ok: true, provider: hasSMTP ? 'smtp' : 'resend' })
     } catch (e: any) {
       return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
     }
