@@ -22,8 +22,8 @@ async function notifyTelegram(sent: number, failed: number) {
 
 async function sendViaResend(to: string, from: string, fromName: string, subject: string, html: string) {
   const resend = new Resend(process.env.RESEND_API_KEY)
-  // Dùng onboarding@resend.dev - verified by default, reply-to là email thật
-  const senderEmail = 'onboarding@resend.dev'
+  // Domain coincu.com đã verified - dùng leon@coincu.com trực tiếp
+  const senderEmail = process.env.RESEND_FROM_EMAIL || 'leon@coincu.com'
   const { error } = await resend.emails.send({
     from: `${fromName} <${senderEmail}>`,
     replyTo: from,
@@ -79,12 +79,12 @@ export async function POST(req: NextRequest) {
 
     try {
       const htmlBody = (bodyText||'Test email from Coincu').replace(/\n/g, '<br>')
-      if (hasSMTP) {
-        await sendViaSMTP(testTo, fromEmail||'leon@coincu.com', fromName||'LEON', subject||'Test', bodyText||'Test', htmlBody)
-      } else if (hasResend) {
+      if (hasResend) {
         await sendViaResend(testTo, fromEmail||'leon@coincu.com', fromName||'LEON', subject||'Test', htmlBody)
+      } else if (hasSMTP) {
+        await sendViaSMTP(testTo, fromEmail||'leon@coincu.com', fromName||'LEON', subject||'Test', bodyText||'Test', htmlBody)
       }
-      return NextResponse.json({ ok: true, provider: hasSMTP ? 'smtp' : 'resend' })
+      return NextResponse.json({ ok: true, provider: hasResend ? 'resend' : 'smtp' })
     } catch (e: any) {
       return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
     }
@@ -126,10 +126,10 @@ export async function POST(req: NextRequest) {
     let errorMsg = null
 
     try {
-      if (hasSMTP) {
-        await sendViaSMTP(email.address, fromEmail, fromName, personalisedSubject, personalised, htmlBody)
-      } else if (hasResend) {
+      if (hasResend) {
         await sendViaResend(email.address, fromEmail, fromName, personalisedSubject, htmlBody)
+      } else if (hasSMTP) {
+        await sendViaSMTP(email.address, fromEmail, fromName, personalisedSubject, personalised, htmlBody)
       }
       await supabase.from('emails').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', email.id)
     } catch (err: any) {
