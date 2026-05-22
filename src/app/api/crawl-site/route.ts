@@ -21,7 +21,7 @@ const SITE_FEEDS: Record<string, string[]> = {
   'cryptobrowser.io':       ['https://cryptobrowser.io/feed/'],
   'coingabbar.com':         ['https://coingabbar.com/en/news/rss'],
   'theportugalnews.com':    ['https://theportugalnews.com/feed/'],
-  'globenewswire.com':      ['https://www.globenewswire.com/RssFeed/industry/9144'],
+  'globenewswire.com':      ['https://www.globenewswire.com/RssFeed/industry/9144', 'https://www.globenewswire.com/RssFeed/country/WORLD/lang/en/industry/9144/keyword/blockchain', 'https://www.globenewswire.com/RssFeed/country/WORLD/lang/en/industry/9155'],
   'crypto.news':            ['https://crypto.news/feed/'],
   'coinmarketcap.com':      ['https://coinmarketcap.com/community/articles/feed/'],
   'crunchbase.com':         ['https://news.crunchbase.com/feed/'],
@@ -57,19 +57,42 @@ function extractEmails(text: string, excludeDomain: string): string[] {
   ))]
 }
 
+const UA_LIST = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  'Feedfetcher-Google; (+http://www.google.com/feedfetcher.html)',
+  'FeedBurner/1.0 (http://www.FeedBurner.com)',
+]
+
 async function fetchFeed(url: string): Promise<string> {
+  const ua = UA_LIST[Math.floor(Math.random() * UA_LIST.length)]
+  const domain = url.replace(/https?:\/\//, '').split('/')[0]
   const res = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; FeedParser/1.0)', 'Accept': 'application/rss+xml, application/xml, text/xml, */*' },
-    signal: AbortSignal.timeout(6000),
+    headers: {
+      'User-Agent': ua,
+      'Accept': 'application/rss+xml, application/xml, text/xml, application/atom+xml, */*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Referer': `https://${domain}/`,
+      'Cache-Control': 'no-cache',
+    },
+    signal: AbortSignal.timeout(8000),
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return await res.text()
 }
 
 async function fetchArticle(url: string): Promise<string> {
+  const ua = UA_LIST[Math.floor(Math.random() * UA_LIST.length)]
+  const domain = url.replace(/https?:\/\//, '').split('/')[0]
   const res = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' },
-    signal: AbortSignal.timeout(6000),
+    headers: {
+      'User-Agent': ua,
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Referer': `https://${domain}/`,
+    },
+    signal: AbortSignal.timeout(8000),
   })
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   const html = await res.text()
