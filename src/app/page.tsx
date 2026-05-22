@@ -946,6 +946,34 @@ export default function Page() {
 
         {/* SEND */}
         {tab === 'send' && <>
+          {/* Quick import emails */}
+          <details style={{ ...S.card(), marginBottom: 10, cursor: 'pointer' }}>
+            <summary style={{ fontWeight: 600, fontSize: 12, color: C.t2, listStyle: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>➕</span> Import email nhanh từ bot / copy-paste
+            </summary>
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 11, color: C.t3, marginBottom: 6 }}>Mỗi dòng 1 email. Format: <code style={{color:C.cyan}}>email@domain.com</code> hoặc <code style={{color:C.cyan}}>Tên &lt;email@domain.com&gt;</code></div>
+              <textarea id="quick-import-box" rows={5} placeholder={'media@btcc.com\npress@binance.com\nJohn Smith <john@project.io>'}
+                style={{ width: '100%', background: C.b0, border: `1px solid ${C.bd}`, borderRadius: 8, padding: '8px 10px', color: C.t1, fontSize: 12, fontFamily: "'JetBrains Mono',monospace", outline: 'none', resize: 'vertical', boxSizing: 'border-box' }} />
+              <button style={{ ...S.btn('p'), marginTop: 8 }} onClick={async () => {
+                const box = document.getElementById('quick-import-box') as HTMLTextAreaElement
+                const lines = box.value.split('\n').map(l=>l.trim()).filter(Boolean)
+                let saved = 0
+                for (const line of lines) {
+                  const match = line.match(/<([^>]+)>/) || line.match(/([\w.+%-]+@[\w-]+\.[\w.]{2,})/)
+                  const addr = match?.[1]?.trim()
+                  if (!addr || !addr.includes('@')) continue
+                  const name = line.includes('<') ? line.split('<')[0].trim() : ''
+                  const domain = addr.split('@')[1]
+                  const r = await fetch('/api/emails', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ address: addr, domain, contact_name: name||null, source_type: 'manual', owner_id: currentUser?.id }) })
+                  if ((await r.json()).ok) saved++
+                }
+                box.value = ''
+                loadEmails()
+                alert('✅ Đã import ' + saved + '/' + lines.length + ' email!')
+              }}>📥 Import {`(xử lý từng dòng)`}</button>
+            </div>
+          </details>
           <div style={{ ...S.card(), background: C.b2, border: 'none', fontSize: 12, marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
             <span>
               <span style={{ color: C.amber, fontWeight: 600 }}>{unsentCount}</span>
