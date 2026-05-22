@@ -7,21 +7,21 @@ import { supabase } from '@/lib/supabase'
 const HUNTER_KEY = process.env.HUNTER_API_KEY
 
 const SITE_FEEDS: Record<string, string[]> = {
-  'zycrypto.com':           ['https://zycrypto.com/feed/', 'https://zycrypto.com/category/press-releases/feed/'],
-  'cryptotimes.io':         ['https://www.cryptotimes.io/feed/', 'https://www.cryptotimes.io/category/press-release/feed/'],
-  'blockchainreporter.net': ['https://blockchainreporter.net/feed/', 'https://blockchainreporter.net/press-releases/feed/'],
-  'livebitcoinnews.com':    ['https://livebitcoinnews.com/feed/', 'https://livebitcoinnews.com/category/press-releases/feed/'],
-  'tronweekly.com':         ['https://www.tronweekly.com/feed/', 'https://www.tronweekly.com/category/press-release/feed/'],
-  'analyticsinsight.net':   ['https://analyticsinsight.net/feed/', 'https://analyticsinsight.net/category/press-release/feed/'],
-  'coindoo.com':            ['https://coindoo.com/feed/', 'https://coindoo.com/category/press-release/feed/'],
-  'captainaltcoin.com':     ['https://captainaltcoin.com/feed/', 'https://captainaltcoin.com/category/press-releases/feed/'],
+  'zycrypto.com':           ['https://zycrypto.com/category/press-release/feed/', 'https://zycrypto.com/feed/'],
+  'cryptotimes.io':         ['https://www.cryptotimes.io/category/press-release/feed/', 'https://cryptotimes.io/feed/'],
+  'blockchainreporter.net': ['https://blockchainreporter.net/press-releases/feed/', 'https://blockchainreporter.net/feed/'],
+  'livebitcoinnews.com':    ['https://livebitcoinnews.com/feed/'],
+  'tronweekly.com':         ['https://www.tronweekly.com/category/press-release/feed/', 'https://tronweekly.com/feed/'],
+  'analyticsinsight.net':   ['https://analyticsinsight.net/feed/'],
+  'coindoo.com':            ['https://coindoo.com/feed/'],
+  'captainaltcoin.com':     ['https://captainaltcoin.com/feed/'],
   'moneycheck.com':         ['https://moneycheck.com/feed/'],
   'optimisus.com':          ['https://optimisus.com/feed/'],
   'timestabloid.com':       ['https://timestabloid.com/feed/'],
   'cryptobrowser.io':       ['https://cryptobrowser.io/feed/'],
-  'coingabbar.com':         ['https://www.coingabbar.com/feed/'],
+  'coingabbar.com':         ['https://coingabbar.com/en/news/rss'],
   'theportugalnews.com':    ['https://theportugalnews.com/feed/'],
-  'globenewswire.com':      ['https://www.globenewswire.com/RssFeed/country/WORLD/lang/en/industry/1/keyword/crypto'],
+  'globenewswire.com':      ['https://www.globenewswire.com/RssFeed/industry/9144'],
   'crypto.news':            ['https://crypto.news/feed/'],
   'coinmarketcap.com':      ['https://coinmarketcap.com/community/articles/feed/'],
   'crunchbase.com':         ['https://news.crunchbase.com/feed/'],
@@ -91,8 +91,12 @@ function parseRSS(xml: string, hostDomain: string): { url: string; title: string
     const titleMatch = item.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/)
     if (!linkMatch) continue
     const url = linkMatch[1].trim()
-    const title = (titleMatch?.[1] || '').replace(/\s+/g, ' ').trim().slice(0, 150)
-    const emails = extractEmails(item, hostDomain)
+    const title = (titleMatch?.[1] || '').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/\s+/g, ' ').trim().slice(0, 150)
+    // Extract emails from RSS item content (description, content:encoded, etc)
+    const descMatch = item.match(/<description>([\s\S]*?)<\/description>/) || 
+                      item.match(/<content:encoded>([\s\S]*?)<\/content:encoded>/)
+    const fullText = item + (descMatch?.[1] || '')
+    const emails = extractEmails(fullText, hostDomain)
     if (url.startsWith('http')) items.push({ url, title, emails })
   }
   return items
