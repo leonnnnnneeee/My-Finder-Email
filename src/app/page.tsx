@@ -532,7 +532,7 @@ export default function Page() {
     <div style={{ background: C.b0, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.t1 }}>
       <div style={{ width: 360, padding: '40px 32px', background: C.b1, border: `1px solid ${C.bd}`, borderRadius: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
-          <img src="/coincu-logo.svg" alt="Coincu" style={{ width: 36, height: 36, borderRadius: 9, objectFit: 'cover' }} />
+          <img src="https://pbs.twimg.com/profile_images/1902957820418592768/xnPqDY4i_400x400.jpg" alt="Coincu" style={{ width: 36, height: 36, borderRadius: 9, objectFit: 'cover' }} />
           <div>
             <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Space Grotesk',sans-serif" }}>Coincu Sales</div>
             <div style={{ fontSize: 11, color: C.t3 }}>Sales Intelligence Dashboard</div>
@@ -570,7 +570,7 @@ export default function Page() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
             onClick={() => setShowUserMenu(p => !p)}>
             <div style={{ position: 'relative' }}>
-              <img src="/coincu-logo.svg" alt="Coincu" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover', display: 'block' }} />
+              <img src="https://pbs.twimg.com/profile_images/1902957820418592768/xnPqDY4i_400x400.jpg" alt="Coincu" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover', display: 'block' }} />
               {currentUser?.role === 'admin' && <span style={{ position: 'absolute', top: -3, right: -3, width: 9, height: 9, background: C.amber, borderRadius: '50%', border: `2px solid ${C.b1}` }} />}
             </div>
             <div>
