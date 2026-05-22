@@ -1001,6 +1001,11 @@ export default function Page() {
                     <span style={{ ...S.bdg(e.status==='sent' ? 'rgba(16,185,129,.15)' : e.status==='failed' ? 'rgba(239,68,68,.15)' : C.b3, e.status==='sent' ? C.green : e.status==='failed' ? '#ef4444' : C.t3), fontSize: 10 }}>
                       {e.status === 'sent' ? '✓ Đã gửi' : e.status === 'failed' ? '✗ Lỗi' : '● Mới'}
                     </span>
+                    {e.sent_at && (
+                      <span style={{ fontSize: 10, color: C.t3, whiteSpace: 'nowrap' }}>
+                        {new Date(e.sent_at).toLocaleDateString('vi-VN', { day:'2-digit', month:'2-digit' })}
+                      </span>
+                    )}
                     <a href={gmailUrl} target="_blank" rel="noreferrer"
                       style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, background: 'rgba(234,67,53,.15)', color: '#ea4335', border: '1px solid rgba(234,67,53,.3)', textDecoration: 'none', whiteSpace: 'nowrap', cursor: 'pointer', fontWeight: 600 }}
                       onClick={async () => {
