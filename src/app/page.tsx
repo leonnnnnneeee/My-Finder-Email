@@ -567,10 +567,21 @@ export default function Page() {
       {/* ── HEADER ── */}
       <div style={{ background: C.b1, borderBottom: `1px solid ${C.bd}`, display: 'flex', alignItems: 'center', gap: 12, padding: '0 18px', height: 52 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ width: 28, height: 28, background: C.blue, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 600, color: '#fff', fontFamily: "'Space Grotesk',sans-serif" }}>C</div>
+          <div style={{ position: 'relative' }}>
+            <div style={{ width: 32, height: 32, background: C.blue, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: '#fff', fontFamily: "'Space Grotesk',sans-serif", cursor: 'pointer' }}
+              title={`${currentUser?.username} (${currentUser?.role})`}>C</div>
+            {currentUser?.role === 'admin' && <span style={{ position: 'absolute', top: -4, right: -4, width: 10, height: 10, background: C.amber, borderRadius: '50%', border: `2px solid ${C.b1}` }} />}
+          </div>
           <div>
-            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14 }}>Coincu</div>
-            <div style={{ fontSize: 10, color: C.t3, letterSpacing: '.05em', textTransform: 'uppercase' }}>Sales Intelligence</div>
+            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+              Coincu
+              <span style={{ fontSize: 11, color: C.t2, fontWeight: 500 }}>{currentUser?.username}</span>
+            </div>
+            <div style={{ fontSize: 10, color: C.t3, letterSpacing: '.05em', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ textTransform: 'uppercase' }}>Sales Intelligence</span>
+              <button onClick={doLogout} style={{ fontSize: 10, padding: '1px 7px', background: C.b3, border: `1px solid ${C.bd}`, borderRadius: 4, color: C.t3, cursor: 'pointer', textTransform: 'none' }}>logout</button>
+              {currentUser?.role === 'admin' && <button onClick={() => setTab('users')} style={{ fontSize: 10, padding: '1px 7px', background: C.amberDim, border: `1px solid rgba(245,158,11,.3)`, borderRadius: 4, color: C.amber, cursor: 'pointer' }}>users</button>}
+            </div>
           </div>
         </div>
         <div style={{ width: 1, height: 28, background: C.bd, margin: '0 4px' }} />
@@ -586,11 +597,7 @@ export default function Page() {
             </div>
           ))}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 16, paddingLeft: 16, borderLeft: `1px solid ${C.bd}` }}>
-          <span style={{ fontSize: 11, color: C.t2, fontWeight: 500 }}>👤 {currentUser?.username}</span>
-          {currentUser?.role === 'admin' && <span style={{ ...S.bdg(C.amberDim, C.amber), fontSize: 10 }}>admin</span>}
-          <button onClick={doLogout} style={{ fontSize: 11, padding: '3px 9px', background: C.b3, border: `1px solid ${C.bd}`, borderRadius: 5, color: C.t2, cursor: 'pointer' }}>Logout</button>
-        </div>
+
       </div>
 
       {/* ── NAV ── */}
