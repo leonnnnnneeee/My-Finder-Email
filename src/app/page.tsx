@@ -516,8 +516,8 @@ export default function Page() {
 
   const TABS = [
     ['dash', '🏠 Dashboard'], ['sites', '🕷 Bài viết'], ['hunter', '🎯 Hunter BOD'],
-    ['remind', '🔔 Remind'], ['pipeline', '📊 Pipeline'], ['contacts', '👥 Contacts'],
-    ['send', '✉️ Gửi'], ['testemail', '🧪 Test Email'], ['tracking', '👁 Tracking'], ['telegram', '📱 Telegram'],
+    ['pipeline', '📊 Pipeline'], ['contacts', '👥 Contacts'],
+    ['send', '✉️ Gửi & Remind'], ['testemail', '🧪 Test Email'], ['tracking', '👁 Tracking'], ['telegram', '📱 Telegram'],
     ['users', '👥 Users'],
   ] as const
 
@@ -604,7 +604,7 @@ export default function Page() {
             display: 'flex', alignItems: 'center', gap: 5,
           }}>
             {l}
-            {k === 'remind' && remindCount > 0 && <span style={{ fontSize: 10, background: C.redDim, color: C.red, padding: '1px 6px', borderRadius: 20, border: `1px solid ${C.red}33` }}>{remindCount}</span>}
+            {k === 'send' && remindCount > 0 && <span style={{ fontSize: 10, background: C.redDim, color: C.red, padding: '1px 6px', borderRadius: 20, border: `1px solid ${C.red}33` }}>{remindCount}</span>}
             {k === 'contacts' && contacts.length > 0 && <span style={{ fontSize: 10, background: C.blueDim, color: C.cyan, padding: '1px 6px', borderRadius: 20, border: `1px solid ${C.cyan}33` }}>{contacts.length}</span>}
             {k === 'tracking' && openEvents.length > 0 && <span style={{ fontSize: 10, background: C.greenDim, color: C.green, padding: '1px 6px', borderRadius: 20, border: `1px solid ${C.green}33` }}>{openEvents.length}</span>}
           </button>
@@ -644,7 +644,7 @@ export default function Page() {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
             <button style={{ ...S.btn('xl'), ...{ background: C.blue, color: '#fff', border: 'none' } }} onClick={() => setTab('sites')}>🕷 Quét 19 sites</button>
             <button style={S.btn('xl')} onClick={() => setTab('hunter')}>🎯 Hunter BOD</button>
-            <button style={S.btn('xl')} onClick={() => { setTab('remind'); runAutoRemind() }}>🔔 Auto-remind</button>
+            <button style={S.btn('xl')} onClick={() => { setTab('send'); runAutoRemind() }}>🔔 Auto-remind</button>
             <button style={{ ...S.btn('xl'), ...{ background: C.cyanDim, border: `1px solid rgba(0,212,255,.3)`, color: C.cyan } }} onClick={() => {
               setContacts(DEMO_CONTACTS.map(d => ({ ...d, id: uid() })))
               setEmails(DEMO_CONTACTS.map(c => ({ id: uid(), address: c.email, domain: c.email.split('@')[1], status: c.stage === 'closed' ? 'sent' as const : 'new' as const, contact_name: c.project, source_type: ['article', 'hunter_bod', 'hunter'][Math.floor(Math.random() * 3)] })))
@@ -809,50 +809,7 @@ export default function Page() {
         </>}
 
         {/* REMIND */}
-        {tab === 'remind' && <>
-          <div style={{ ...S.card(), background: `linear-gradient(135deg,${C.b1} 0%,#061520 100%)`, border: `1px solid rgba(0,212,255,.25)`, marginBottom: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-              <span style={{ color: C.cyan }}>⏰</span>
-              <span style={{ fontWeight: 600, fontSize: 13, fontFamily: "'Space Grotesk',sans-serif", color: C.cyan }}>Auto-remind — 3 lần/tháng</span>
-            </div>
-            <p style={{ fontSize: 11, color: C.cyanMid, lineHeight: 1.6 }}>Ngày 0 → 10 → 20. Sau 3 lần không reply → Cold. Cron chạy 8h sáng tự động.</p>
-            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-              <button style={S.btn('p')} onClick={runAutoRemind} disabled={busy}>▶ Chạy auto-remind</button>
-              <button style={S.btn()} onClick={() => setContacts(DEMO_CONTACTS.map(d => ({ ...d, id: uid() })))}>✨ Demo data</button>
-            </div>
-          </div>
 
-          {contacts.filter(needsRemind).length === 0
-            ? <div style={{ textAlign: 'center', padding: 24, color: C.t3, fontSize: 12 }}>✓ Tất cả đã được chăm sóc</div>
-            : contacts.filter(needsRemind).sort((a, b) => daysSince(b.lastSent) - daysSince(a.lastSent)).map(c => {
-              const days = daysSince(c.lastSent), fn = c.seq + 1
-              const subj = [``, `Quick follow-up — ${c.project} & Coincu`, `Last follow-up — ${c.project}`][fn] || `Follow-up — ${c.project}`
-              const [bg, col] = SC[c.stage] || SC.new
-              const isUrgent = days >= 20
-              return (
-                <div key={c.id} style={{ background: isUrgent ? `linear-gradient(135deg,${C.b1} 0%,rgba(58,5,5,.3) 100%)` : C.b1, border: `1px solid ${isUrgent ? `rgba(239,68,68,.4)` : days >= 10 ? `rgba(245,158,11,.35)` : C.bd}`, borderRadius: 10, padding: '11px 14px', marginBottom: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4, flexWrap: 'wrap' }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, fontFamily: "'Space Grotesk',sans-serif" }}>{c.project}</span>
-                        <span style={S.bdg(bg, col)}>{SL[c.stage]}</span>
-                        {c.opened && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, padding: '2px 7px', borderRadius: 20, background: `rgba(0,212,255,.1)`, color: C.cyan, border: `1px solid rgba(0,212,255,.2)`, fontWeight: 500 }}>👁 Opened</span>}
-                        {fn === 3 && <span style={S.bdg(C.redDim, C.red)}>Lần cuối</span>}
-                      </div>
-                      <div style={{ fontSize: 10, color: C.t3, fontFamily: "'JetBrains Mono',monospace" }}>{c.email}</div>
-                      <div style={{ fontSize: 11, color: C.t2, marginTop: 3 }}>Follow-up #{fn} · {days} ngày trước · "{subj}"</div>
-                    </div>
-                    <button style={isUrgent ? S.btn('p') : S.btn('sm')} onClick={() => {
-                      setContacts(prev => prev.map(x => x.id === c.id ? { ...x, seq: x.seq + 1, lastSent: new Date().toLocaleDateString('vi-VN'), stage: x.seq + 1 >= 3 ? 'cold' : x.stage === 'new' ? 'contacted' : x.stage } : x))
-                      addTgMsg(`⏰ Follow-up #${c.seq + 1} → ${c.project}`)
-                    }}>✉️ {isUrgent ? 'Gửi ngay!' : 'Gửi'}</button>
-                  </div>
-                </div>
-              )
-            })
-          }
-          {remindLog.length > 0 && <LogPane logs={remindLog} pct={rp} color={C.cyan} />}
-        </>}
 
         {/* PIPELINE */}
         {tab === 'pipeline' && <>
@@ -934,6 +891,24 @@ export default function Page() {
 
         {/* SEND */}
         {tab === 'send' && <>
+          {/* Remind summary - emails cần follow up */}
+          {emails.filter(e => e.status === 'sent' && !e.remind1_sent_at).length > 0 && (
+            <div style={{ ...S.card(), border: `1px solid rgba(245,158,11,.3)`, background: 'rgba(245,158,11,.04)', marginBottom: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <div style={{ fontWeight: 600, fontSize: 12, color: C.amber }}>
+                  🔔 {emails.filter(e => e.status === 'sent' && !e.remind1_sent_at).length} email chờ Remind 1
+                </div>
+                <button style={{ fontSize: 11, padding: '3px 10px', background: 'rgba(245,158,11,.15)', border: '1px solid rgba(245,158,11,.3)', borderRadius: 6, color: C.amber, cursor: 'pointer', fontWeight: 600 }}
+                  onClick={async () => {
+                    const toRemind = emails.filter(e => e.status === 'sent' && !e.remind1_sent_at)
+                    if (!confirm(`Gửi Remind 1 cho ${toRemind.length} emails?`)) return
+                    for (const e of toRemind) await sendRemind(e.id, 1)
+                    loadEmails()
+                  }}>⚡ Gửi tất cả R1</button>
+              </div>
+              <div style={{ fontSize: 11, color: C.t3 }}>Click R1/R2/R3 bên dưới để gửi từng email, hoặc gửi tất cả cùng lúc</div>
+            </div>
+          )}
           {/* Quick import emails */}
           <details style={{ ...S.card(), marginBottom: 10, cursor: 'pointer' }}>
             <summary style={{ fontWeight: 600, fontSize: 12, color: C.t2, listStyle: 'none', display: 'flex', alignItems: 'center', gap: 6 }}>

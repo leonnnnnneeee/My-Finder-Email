@@ -11,20 +11,38 @@ async function generateRemind(originalSubject: string, originalBody: string, rem
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY||'', 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514', max_tokens: 400,
-        messages: [{ role: 'user', content: `You are a sales email writer for Coincu (blockchain PR & marketing).
+        model: 'claude-sonnet-4-20250514', max_tokens: 500,
+        messages: [{ role: 'user', content: `You are LEON, Chief Business Development Officer at Coincu — a leading blockchain PR & marketing agency in Southeast Asia. You write concise, professional sales follow-up emails.
 
-Original email:
+ORIGINAL EMAIL SENT:
 Subject: ${originalSubject}
 Body: ${originalBody}
 
-Write follow-up #${remindNum} for project "${project}".
-Remind 1: Friendly short follow-up (3-4 lines), reference original briefly
-Remind 2: Value-add follow-up, mention specific benefit, slightly more urgency  
-Remind 3: Final follow-up, FOMO tone, very short (2-3 lines)
+PROJECT: ${project}
+FOLLOW-UP NUMBER: ${remindNum} of 3
 
-Rules: English, professional, include Telegram: https://t.me/iamleonnn, sign off "LEON (Mr.) | Coincu | leon@coincu.com"
-Return ONLY valid JSON: {"subject":"...","body":"..."}` }]
+INSTRUCTIONS:
+${remindNum === 1 ? `Write a short, warm follow-up (4-5 lines max).
+- Start with "Just wanted to follow up on my previous email"
+- Briefly restate the value proposition in 1 sentence
+- End with a soft CTA (reply or Telegram)
+- Tone: friendly, not pushy` : remindNum === 2 ? `Write a value-driven follow-up (5-6 lines).
+- Start differently from follow-up 1 (e.g. "I wanted to share...")
+- Add a specific proof point: "We recently helped [type of project] achieve [result] through our PR & CMC Top News campaigns"
+- Create mild urgency: mention limited slots or current momentum
+- Tone: professional, confident` : `Write a very short final follow-up (3-4 lines max).
+- Acknowledge this is your last outreach
+- Leave the door open: "If timing isn't right, no worries"
+- One last value hook in 1 sentence
+- Tone: gracious, no pressure`}
+
+RULES:
+- Write in English
+- Keep subject line concise and relevant
+- Include exactly: https://t.me/iamleonnn
+- Sign off: LEON (Mr.) | CBO — Coincu | leon@coincu.com
+- Do NOT use emojis in body text
+- Return ONLY valid JSON with no extra text: {"subject":"...","body":"..."}` }]
       })
     })
     const d = await r.json()
