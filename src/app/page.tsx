@@ -993,7 +993,10 @@ export default function Page() {
                   <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: i < emails.length-1 ? `1px solid ${C.bd}` : 'none', opacity: e.status === 'sent' ? 0.6 : 1 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 600 }}>{e.address}</div>
-                      <div style={{ fontSize: 10, color: C.t3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.contact_name || e.domain}</div>
+                      <div style={{ fontSize: 10, color: C.t3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', gap: 6 }}>
+                        <span>{e.contact_name || e.domain}</span>
+                        {e.sent_at && <span style={{ color: C.amber, flexShrink: 0 }}>· Gửi {new Date(e.sent_at).toLocaleDateString('vi-VN', { day:'2-digit', month:'2-digit', year:'2-digit' })}</span>}
+                      </div>
                     </div>
                     <span style={S.bdg(e.source_type === 'hunter_bod' ? C.amberDim : C.blueDim, e.source_type === 'hunter_bod' ? C.amber : C.cyan)}>
                       {e.source_type === 'hunter_bod' ? 'BOD👑' : 'Bài PR'}
@@ -1001,11 +1004,7 @@ export default function Page() {
                     <span style={{ ...S.bdg(e.status==='sent' ? 'rgba(16,185,129,.15)' : e.status==='failed' ? 'rgba(239,68,68,.15)' : C.b3, e.status==='sent' ? C.green : e.status==='failed' ? '#ef4444' : C.t3), fontSize: 10 }}>
                       {e.status === 'sent' ? '✓ Đã gửi' : e.status === 'failed' ? '✗ Lỗi' : '● Mới'}
                     </span>
-                    {e.sent_at && (
-                      <span style={{ fontSize: 10, color: C.t3, whiteSpace: 'nowrap' }}>
-                        {new Date(e.sent_at).toLocaleDateString('vi-VN', { day:'2-digit', month:'2-digit' })}
-                      </span>
-                    )}
+
                     <a href={gmailUrl} target="_blank" rel="noreferrer"
                       style={{ fontSize: 11, padding: '4px 10px', borderRadius: 6, background: 'rgba(234,67,53,.15)', color: '#ea4335', border: '1px solid rgba(234,67,53,.3)', textDecoration: 'none', whiteSpace: 'nowrap', cursor: 'pointer', fontWeight: 600 }}
                       onClick={async () => {
