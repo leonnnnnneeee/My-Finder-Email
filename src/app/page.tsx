@@ -165,6 +165,7 @@ export default function Page() {
   const [users, setUsers] = useState<User[]>([])
   const [userForm, setUserForm] = useState({ id: '', username: '', password: '', role: 'user' })
   const [showUserForm, setShowUserForm] = useState(false)
+  const [showUserMenu, setShowUserMenu] = useState(false)
   const [sendLog, setSendLog] = useState<Log[]>([])
   const [remindLog, setRemindLog] = useState<Log[]>([])
   const [fp, setFp] = useState(0)
@@ -518,7 +519,6 @@ export default function Page() {
     ['dash', '🏠 Dashboard'], ['sites', '🕷 Bài viết'], ['hunter', '🎯 Hunter BOD'],
     ['pipeline', '📊 Pipeline'], ['contacts', '👥 Contacts'],
     ['send', '✉️ Gửi & Remind'], ['testemail', '🧪 Test Email'], ['tracking', '👁 Tracking'], ['telegram', '📱 Telegram'],
-    ['users', '👥 Users'],
   ] as const
 
   const hdrKpis = [
@@ -566,23 +566,42 @@ export default function Page() {
 
       {/* ── HEADER ── */}
       <div style={{ background: C.b1, borderBottom: `1px solid ${C.bd}`, display: 'flex', alignItems: 'center', gap: 12, padding: '0 18px', height: 52 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ position: 'relative' }}>
-            <div style={{ width: 32, height: 32, background: C.blue, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: '#fff', fontFamily: "'Space Grotesk',sans-serif", cursor: 'pointer' }}
-              title={`${currentUser?.username} (${currentUser?.role})`}>C</div>
-            {currentUser?.role === 'admin' && <span style={{ position: 'absolute', top: -4, right: -4, width: 10, height: 10, background: C.amber, borderRadius: '50%', border: `2px solid ${C.b1}` }} />}
-          </div>
-          <div>
-            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
-              Coincu
-              <span style={{ fontSize: 11, color: C.t2, fontWeight: 500 }}>{currentUser?.username}</span>
+        <div style={{ position: 'relative' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+            onClick={() => setShowUserMenu(p => !p)}>
+            <div style={{ position: 'relative' }}>
+              <div style={{ width: 32, height: 32, background: C.blue, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: '#fff', fontFamily: "'Space Grotesk',sans-serif" }}>C</div>
+              {currentUser?.role === 'admin' && <span style={{ position: 'absolute', top: -3, right: -3, width: 9, height: 9, background: C.amber, borderRadius: '50%', border: `2px solid ${C.b1}` }} />}
             </div>
-            <div style={{ fontSize: 10, color: C.t3, letterSpacing: '.05em', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ textTransform: 'uppercase' }}>Sales Intelligence</span>
-              <button onClick={doLogout} style={{ fontSize: 10, padding: '1px 7px', background: C.b3, border: `1px solid ${C.bd}`, borderRadius: 4, color: C.t3, cursor: 'pointer', textTransform: 'none' }}>logout</button>
-              {currentUser?.role === 'admin' && <button onClick={() => setTab('users')} style={{ fontSize: 10, padding: '1px 7px', background: C.amberDim, border: `1px solid rgba(245,158,11,.3)`, borderRadius: 4, color: C.amber, cursor: 'pointer' }}>users</button>}
+            <div>
+              <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14 }}>Coincu</div>
+              <div style={{ fontSize: 10, color: C.t3, letterSpacing: '.05em', textTransform: 'uppercase' }}>Sales Intelligence</div>
             </div>
           </div>
+          {showUserMenu && (
+            <div style={{ position: 'absolute', top: 44, left: 0, zIndex: 999, background: C.b1, border: `1px solid ${C.bd}`, borderRadius: 10, padding: 6, minWidth: 180, boxShadow: '0 8px 24px rgba(0,0,0,.4)' }}>
+              <div style={{ padding: '8px 12px', borderBottom: `1px solid ${C.bd}`, marginBottom: 4 }}>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>👤 {currentUser?.username}</div>
+                <div style={{ fontSize: 11, color: C.t3 }}>
+                  {currentUser?.role === 'admin' ? <span style={{ color: C.amber }}>● Admin</span> : <span style={{ color: C.t3 }}>● User</span>}
+                </div>
+              </div>
+              {currentUser?.role === 'admin' && (
+                <button onClick={() => { setTab('users'); setShowUserMenu(false) }}
+                  style={{ width: '100%', textAlign: 'left', padding: '7px 12px', background: 'none', border: 'none', color: C.t1, fontSize: 12, cursor: 'pointer', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8 }}
+                  onMouseEnter={e => (e.currentTarget.style.background = C.b3)}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+                  👥 Quản lý Users
+                </button>
+              )}
+              <button onClick={() => { doLogout(); setShowUserMenu(false) }}
+                style={{ width: '100%', textAlign: 'left', padding: '7px 12px', background: 'none', border: 'none', color: '#ef4444', fontSize: 12, cursor: 'pointer', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8 }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,.1)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+                → Đăng xuất
+              </button>
+            </div>
+          )}
         </div>
         <div style={{ width: 1, height: 28, background: C.bd, margin: '0 4px' }} />
         <div style={{ fontSize: 11, color: C.t3 }}>
