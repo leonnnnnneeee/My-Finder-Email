@@ -1,8 +1,10 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 
-type Email = { id: string; address: string; source_url?: string | null; domain?: string | null; status: 'new' | 'sent' | 'failed'; contact_name?: string; position?: string; confidence?: number; source_type?: string; created_at?: string }
+type Email = { id: string; address: string; source_url?: string | null; domain?: string | null; status: 'new' | 'sent' | 'failed'; contact_name?: string; position?: string; confidence?: number; source_type?: string; created_at?: string; sent_at?: string; remind1_sent_at?: string; remind2_sent_at?: string; remind3_sent_at?: string; remind1_status?: string; remind2_status?: string; remind3_status?: string; owner_id?: string }
 type Site = { id: string; url: string; domain: string; last_crawled_at?: string; total_pages_crawled: number; total_emails_found: number }
+type User = { id: string; username: string; role: string; created_at?: string; last_login?: string }
+type CurrentUser = { id: string; username: string; role: string } | null
 type Log = { msg: string; t: 'info' | 'ok' | 'err' | 'dim' | 'warn' }
 type StagedEmail = { addr: string; src: string; name: string; domain: string; pos: string; articleUrl: string; articleTitle: string; checked: boolean }
 type Contact = { id: string; email: string; project: string; stage: string; seq: number; lastSent: string | null; opened: boolean; note: string }
@@ -156,6 +158,13 @@ export default function Page() {
   const [hunterLog, setHunterLog] = useState<Log[]>([])
   const [crawlLog, setCrawlLog] = useState<Log[]>([])
   const [stagedEmails, setStagedEmails] = useState<StagedEmail[]>([])
+  const [currentUser, setCurrentUser] = useState<CurrentUser>(null)
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' })
+  const [loginError, setLoginError] = useState('')
+  const [loginLoading, setLoginLoading] = useState(false)
+  const [users, setUsers] = useState<User[]>([])
+  const [userForm, setUserForm] = useState({ id: '', username: '', password: '', role: 'user' })
+  const [showUserForm, setShowUserForm] = useState(false)
   const [sendLog, setSendLog] = useState<Log[]>([])
   const [remindLog, setRemindLog] = useState<Log[]>([])
   const [fp, setFp] = useState(0)
@@ -211,8 +220,13 @@ export default function Page() {
     } catch {}
   }, [])
 
-  useEffect(() => { loadEmails() }, [loadEmails])
+  useEffect(() => {
+    const saved = localStorage.getItem('coincu_user')
+    if (saved) { try { setCurrentUser(JSON.parse(saved)) } catch {} }
+    loadEmails()
+  }, [loadEmails])
   useEffect(() => { if (tab === 'sites') loadSites() }, [tab, loadSites])
+  useEffect(() => { if (tab === 'users' && currentUser?.role === 'admin') loadUsers() }, [tab, currentUser])
 
   const addLog = (set: any, msg: string, t: Log['t'] = 'info') => set((p: Log[]) => [...p, { msg, t }])
   const addTgMsg = (text: string) => setTgMsgs(p => [{ text, time: new Date().toLocaleTimeString('vi-VN') }, ...p.slice(0, 9)])
@@ -312,6 +326,74 @@ export default function Page() {
       addLog(setCrawlLog, `\n─── Xong: ${allFound.length} email tìm thấy ───`, allFound.length > 0 ? 'ok' : 'dim')
     } catch (e: any) { addLog(setCrawlLog, `✗ ${e.message}`, 'err') }
     setCrawlingSite(null); loadSites()
+  }
+
+    // ─── Auth functions ───
+  async function doLogin() {
+    setLoginLoading(true); setLoginError('')
+    const r = await fetch('/api/auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(loginForm) })
+    const d = await r.json()
+    if (d.ok) {
+      setCurrentUser(d.user)
+      localStorage.setItem('coincu_user', JSON.stringify(d.user))
+    } else { setLoginError(d.error || 'Đăng nhập thất bại') }
+    setLoginLoading(false)
+  }
+
+  function doLogout() {
+    setCurrentUser(null); localStorage.removeItem('coincu_user')
+  }
+
+  async function loadUsers() {
+    const r = await fetch('/api/auth')
+    const d = await r.json()
+    setUsers(d.users || [])
+  }
+
+  async function saveUser() {
+    const r = await fetch('/api/auth', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(userForm) })
+    const d = await r.json()
+    if (d.ok) { setShowUserForm(false); setUserForm({ id: '', username: '', password: '', role: 'user' }); loadUsers() }
+    else alert(d.error)
+  }
+
+  async function deleteUser(id: string) {
+    if (!confirm('Xóa user này?')) return
+    await fetch('/api/auth', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+    loadUsers()
+  }
+
+  async function sendRemind(emailId: string, remindNum: 1|2|3, emailAddress: string) {
+    const email = emails.find(e => e.id === emailId)
+    if (!email) return
+    const project = email.contact_name?.split(' ').slice(0,3).join(' ') || email.domain?.split('.')[0] || 'Project'
+    const remindSubjects = [
+      `Following up: Coincu PR & CMC Top News for ${project}`,
+      `2nd follow-up: Boost ${project} Visibility — Coincu`,
+      `Final follow-up: ${project} × Coincu Partnership`
+    ]
+    const remindBodies = [
+      `Hi,\n\nI wanted to follow up on my previous email about boosting ${project}'s visibility through Coincu.\n\nWe help 200+ blockchain projects with PR Distribution and CoinMarketCap Top News listing.\n\nWould love to connect: https://t.me/iamleonnn\n\nBest,\nLEON (Mr.) — Coincu\nE: leon@coincu.com`,
+      `Hi,\n\nI'm reaching out again regarding ${project}'s visibility opportunities.\n\nMany projects we've worked with saw significant increases in organic reach after our PR campaigns.\n\nIs this something ${project} would be interested in exploring?\n\nTelegram: https://t.me/iamleonnn\n\nBest,\nLEON (Mr.) — Coincu`,
+      `Hi,\n\nThis is my final follow-up regarding a potential collaboration between ${project} and Coincu.\n\nIf there's a better time to connect, please let me know.\n\nTelegram: https://t.me/iamleonnn\n\nBest,\nLEON (Mr.) — Coincu\nE: leon@coincu.com`
+    ]
+    const r = await fetch('/api/send-emails', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        testTo: emailAddress,
+        subject: remindSubjects[remindNum-1],
+        bodyText: remindBodies[remindNum-1],
+        fromName: 'LEON (Mr.) — Coincu',
+        fromEmail: 'leon@coincu.com'
+      })
+    })
+    const d = await r.json()
+    if (d.ok) {
+      const field = `remind${remindNum}_sent_at`
+      const statusField = `remind${remindNum}_status`
+      await fetch(`/api/emails/${emailId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [field]: new Date().toISOString(), [statusField]: 'sent' }) })
+      loadEmails()
+    } else { alert('Lỗi: ' + d.error) }
   }
 
     async function collectStaged() {
@@ -448,6 +530,7 @@ export default function Page() {
     ['dash', '🏠 Dashboard'], ['sites', '🕷 Bài viết'], ['hunter', '🎯 Hunter BOD'],
     ['remind', '🔔 Remind'], ['pipeline', '📊 Pipeline'], ['contacts', '👥 Contacts'],
     ['send', '✉️ Gửi'], ['testemail', '🧪 Test Email'], ['tracking', '👁 Tracking'], ['telegram', '📱 Telegram'],
+    ['users', '👥 Users'],
   ] as const
 
   const hdrKpis = [
@@ -455,6 +538,40 @@ export default function Page() {
     ['Đã gửi', sentCount, C.green], ['Opened', openEvents.length, C.cyan],
     ['Remind', remindCount, C.red],
   ] as [string, number, string][]
+
+  // ─── LOGIN SCREEN ───
+  if (!currentUser) return (
+    <div style={{ background: C.b0, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.t1 }}>
+      <div style={{ width: 360, padding: '40px 32px', background: C.b1, border: `1px solid ${C.bd}`, borderRadius: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28 }}>
+          <div style={{ width: 36, height: 36, background: C.blue, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, color: '#fff' }}>C</div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Space Grotesk',sans-serif" }}>Coincu Sales</div>
+            <div style={{ fontSize: 11, color: C.t3 }}>Sales Intelligence Dashboard</div>
+          </div>
+        </div>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, color: C.t2, marginBottom: 5, fontWeight: 600 }}>USERNAME</div>
+          <input value={loginForm.username} onChange={e => setLoginForm(p=>({...p, username: e.target.value}))}
+            onKeyDown={e => e.key === 'Enter' && doLogin()}
+            placeholder="username" autoFocus
+            style={{ width: '100%', background: C.b0, border: `1px solid ${C.bd}`, borderRadius: 8, padding: '9px 12px', color: C.t1, fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+        </div>
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 11, color: C.t2, marginBottom: 5, fontWeight: 600 }}>PASSWORD</div>
+          <input type="password" value={loginForm.password} onChange={e => setLoginForm(p=>({...p, password: e.target.value}))}
+            onKeyDown={e => e.key === 'Enter' && doLogin()}
+            placeholder="••••••••"
+            style={{ width: '100%', background: C.b0, border: `1px solid ${C.bd}`, borderRadius: 8, padding: '9px 12px', color: C.t1, fontSize: 13, outline: 'none', boxSizing: 'border-box' }} />
+        </div>
+        {loginError && <div style={{ color: '#ef4444', fontSize: 12, marginBottom: 12 }}>⚠ {loginError}</div>}
+        <button onClick={doLogin} disabled={loginLoading}
+          style={{ width: '100%', background: C.blue, color: '#fff', border: 'none', borderRadius: 8, padding: '10px', fontWeight: 600, fontSize: 13, cursor: 'pointer', opacity: loginLoading ? 0.7 : 1 }}>
+          {loginLoading ? 'Đang đăng nhập...' : '→ Đăng nhập'}
+        </button>
+      </div>
+    </div>
+  )
 
   return (
     <div style={{ background: C.b0, minHeight: '100vh', color: C.t1, fontSize: 13 }}>
@@ -480,6 +597,11 @@ export default function Page() {
               <div style={{ fontSize: 10, color: C.t3, marginTop: 2, textTransform: 'uppercase', letterSpacing: '.06em' }}>{l}</div>
             </div>
           ))}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 16, paddingLeft: 16, borderLeft: `1px solid ${C.bd}` }}>
+          <span style={{ fontSize: 11, color: C.t2, fontWeight: 500 }}>👤 {currentUser?.username}</span>
+          {currentUser?.role === 'admin' && <span style={{ ...S.bdg(C.amberDim, C.amber), fontSize: 10 }}>admin</span>}
+          <button onClick={doLogout} style={{ fontSize: 11, padding: '3px 9px', background: C.b3, border: `1px solid ${C.bd}`, borderRadius: 5, color: C.t2, cursor: 'pointer' }}>Logout</button>
         </div>
       </div>
 
@@ -870,7 +992,20 @@ export default function Page() {
                           loadEmails()
                         }
                       }}
-                    >📧 Gửi Gmail</a>
+                    >📧 Gửi</a>
+                    {e.status === 'sent' && ([1,2,3] as const).map(n => {
+                      const sentAt = e[`remind${n}_sent_at` as keyof typeof e]
+                      const isDone = !!sentAt
+                      const canSend = n === 1 ? true : !!e[`remind${n-1}_sent_at` as keyof typeof e]
+                      return (
+                        <button key={n} disabled={isDone || !canSend}
+                          onClick={() => sendRemind(e.id, n, e.address)}
+                          title={isDone ? `Đã remind ${n}: ${new Date(sentAt as string).toLocaleDateString('vi-VN')}` : canSend ? `Gửi Remind ${n}` : `Cần gửi Remind ${n-1} trước`}
+                          style={{ fontSize: 10, padding: '4px 8px', borderRadius: 6, border: `1px solid ${isDone ? C.greenDim : canSend ? 'rgba(245,158,11,.4)' : C.bd}`, background: isDone ? C.greenDim : canSend ? 'rgba(245,158,11,.1)' : C.b2, color: isDone ? C.green : canSend ? C.amber : C.t3, cursor: isDone || !canSend ? 'default' : 'pointer', whiteSpace: 'nowrap', opacity: isDone || !canSend ? 0.6 : 1 }}>
+                          {isDone ? `✓R${n}` : `R${n}`}
+                        </button>
+                      )
+                    })}
                   </div>
                 )})}
               </div>
@@ -1042,6 +1177,62 @@ SMTP_PASS     = xxxx xxxx xxxx xxxx  (Gmail App Password)`}</pre>
                 <div style={{ fontSize: 11, color: C.t3 }}>{d}</div>
               </div>
             ))}
+          </div>
+        </>}
+
+        {/* ── USERS TAB ── */}
+        {tab === 'users' && currentUser?.role === 'admin' && <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <div style={{ fontWeight: 600, fontSize: 14 }}>👥 Quản lý Users</div>
+            <button style={{ ...S.btn('p') }} onClick={() => { setUserForm({ id:'', username:'', password:'', role:'user' }); setShowUserForm(true) }}>+ Thêm user</button>
+          </div>
+
+          {showUserForm && (
+            <div style={{ ...S.card(), marginBottom: 12, border: `1px solid ${C.blue}40` }}>
+              <div style={{ fontWeight: 600, marginBottom: 10 }}>{userForm.id ? 'Sửa' : 'Thêm'} user</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginBottom: 10 }}>
+                <input placeholder="Username" value={userForm.username} onChange={e => setUserForm(p=>({...p, username: e.target.value}))}
+                  style={{ background: C.b0, border: `1px solid ${C.bd}`, borderRadius: 6, padding: '7px 10px', color: C.t1, fontSize: 12, outline: 'none' }} />
+                <input type="password" placeholder="Password" value={userForm.password} onChange={e => setUserForm(p=>({...p, password: e.target.value}))}
+                  style={{ background: C.b0, border: `1px solid ${C.bd}`, borderRadius: 6, padding: '7px 10px', color: C.t1, fontSize: 12, outline: 'none' }} />
+                <select value={userForm.role} onChange={e => setUserForm(p=>({...p, role: e.target.value}))}
+                  style={{ background: C.b0, border: `1px solid ${C.bd}`, borderRadius: 6, padding: '7px 10px', color: C.t1, fontSize: 12, outline: 'none' }}>
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button style={{ ...S.btn('p') }} onClick={saveUser}>💾 Lưu</button>
+                <button style={{ ...S.btn('sm'), background: C.b3, color: C.t2 }} onClick={() => setShowUserForm(false)}>Hủy</button>
+              </div>
+            </div>
+          )}
+
+          <div style={{ ...S.card() }}>
+            <div style={{ background: C.b0, border: `1px solid ${C.bd}`, borderRadius: 8, overflow: 'hidden' }}>
+              {users.map((u, i) => (
+                <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: i < users.length-1 ? `1px solid ${C.bd}` : 'none' }}>
+                  <div style={{ width: 32, height: 32, background: u.role === 'admin' ? C.amberDim : C.blueDim, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, color: u.role === 'admin' ? C.amber : C.cyan }}>
+                    {u.username[0].toUpperCase()}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{u.username}</div>
+                    <div style={{ fontSize: 10, color: C.t3 }}>Last login: {u.last_login ? new Date(u.last_login).toLocaleString('vi-VN') : 'Chưa login'}</div>
+                  </div>
+                  <span style={S.bdg(u.role === 'admin' ? C.amberDim : C.blueDim, u.role === 'admin' ? C.amber : C.cyan)}>{u.role}</span>
+                  <span style={{ fontSize: 10, color: C.t3 }}>{u.created_at ? new Date(u.created_at).toLocaleDateString('vi-VN') : ''}</span>
+                  {u.id !== currentUser?.id && (
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button onClick={() => { setUserForm({ id: u.id, username: u.username, password: '••••••••', role: u.role }); setShowUserForm(true) }}
+                        style={{ fontSize: 11, padding: '3px 8px', background: C.b3, border: `1px solid ${C.bd}`, borderRadius: 5, color: C.t2, cursor: 'pointer' }}>Sửa</button>
+                      <button onClick={() => deleteUser(u.id)}
+                        style={{ fontSize: 11, padding: '3px 8px', background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', borderRadius: 5, color: '#ef4444', cursor: 'pointer' }}>Xóa</button>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {users.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: C.t3 }}>Chưa có user nào</div>}
+            </div>
           </div>
         </>}
 
