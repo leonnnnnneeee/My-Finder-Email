@@ -1,5 +1,9 @@
 import type { Metadata } from 'next'
-export const metadata: Metadata = { title: 'Coincu — Sales Intelligence', description: 'Crypto Email Finder & Sales CRM' }
+export const metadata: Metadata = { 
+  title: 'Coincu — Sales Intelligence', 
+  description: 'Crypto Email Finder & Sales CRM',
+  icons: { icon: 'https://coincu.com/wp-content/uploads/2021/08/coin1290.png' }
+}
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="vi">
