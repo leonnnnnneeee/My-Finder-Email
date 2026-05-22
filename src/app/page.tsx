@@ -363,37 +363,25 @@ export default function Page() {
     loadUsers()
   }
 
-  async function sendRemind(emailId: string, remindNum: 1|2|3, emailAddress: string) {
-    const email = emails.find(e => e.id === emailId)
-    if (!email) return
-    const project = email.contact_name?.split(' ').slice(0,3).join(' ') || email.domain?.split('.')[0] || 'Project'
-    const remindSubjects = [
-      `Following up: Coincu PR & CMC Top News for ${project}`,
-      `2nd follow-up: Boost ${project} Visibility — Coincu`,
-      `Final follow-up: ${project} × Coincu Partnership`
-    ]
-    const remindBodies = [
-      `Hi,\n\nI wanted to follow up on my previous email about boosting ${project}'s visibility through Coincu.\n\nWe help 200+ blockchain projects with PR Distribution and CoinMarketCap Top News listing.\n\nWould love to connect: https://t.me/iamleonnn\n\nBest,\nLEON (Mr.) — Coincu\nE: leon@coincu.com`,
-      `Hi,\n\nI'm reaching out again regarding ${project}'s visibility opportunities.\n\nMany projects we've worked with saw significant increases in organic reach after our PR campaigns.\n\nIs this something ${project} would be interested in exploring?\n\nTelegram: https://t.me/iamleonnn\n\nBest,\nLEON (Mr.) — Coincu`,
-      `Hi,\n\nThis is my final follow-up regarding a potential collaboration between ${project} and Coincu.\n\nIf there's a better time to connect, please let me know.\n\nTelegram: https://t.me/iamleonnn\n\nBest,\nLEON (Mr.) — Coincu\nE: leon@coincu.com`
-    ]
-    const r = await fetch('/api/send-emails', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        testTo: emailAddress,
-        subject: remindSubjects[remindNum-1],
-        bodyText: remindBodies[remindNum-1],
-        fromName: 'LEON (Mr.) — Coincu',
-        fromEmail: 'leon@coincu.com'
+  async function sendRemind(emailId: string, remindNum: 1|2|3) {
+    const btn = document.getElementById(`remind-btn-${emailId}-${remindNum}`)
+    if (btn) btn.textContent = '...'
+    try {
+      const r = await fetch('/api/remind', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emailId, remindNum })
       })
-    })
-    const d = await r.json()
-    if (d.ok) {
-      const field = `remind${remindNum}_sent_at`
-      const statusField = `remind${remindNum}_status`
-      await fetch(`/api/emails/${emailId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [field]: new Date().toISOString(), [statusField]: 'sent' }) })
-      loadEmails()
-    } else { alert('Lỗi: ' + d.error) }
+      const d = await r.json()
+      if (d.ok) {
+        loadEmails()
+      } else {
+        alert('Lỗi gửi remind: ' + d.error)
+        if (btn) btn.textContent = `R${remindNum}`
+      }
+    } catch(e: any) {
+      alert('Lỗi: ' + e.message)
+      if (btn) btn.textContent = `R${remindNum}`
+    }
   }
 
     async function collectStaged() {
@@ -1026,8 +1014,8 @@ export default function Page() {
                       const isDone = !!sentAt
                       const canSend = n === 1 ? true : !!e[`remind${n-1}_sent_at` as keyof typeof e]
                       return (
-                        <button key={n} disabled={isDone || !canSend}
-                          onClick={() => sendRemind(e.id, n, e.address)}
+                        <button key={n} id={`remind-btn-${e.id}-${n}`} disabled={isDone || !canSend}
+                          onClick={() => sendRemind(e.id, n)}
                           title={isDone ? `Đã remind ${n}: ${new Date(sentAt as string).toLocaleDateString('vi-VN')}` : canSend ? `Gửi Remind ${n}` : `Cần gửi Remind ${n-1} trước`}
                           style={{ fontSize: 10, padding: '4px 8px', borderRadius: 6, border: `1px solid ${isDone ? C.greenDim : canSend ? 'rgba(245,158,11,.4)' : C.bd}`, background: isDone ? C.greenDim : canSend ? 'rgba(245,158,11,.1)' : C.b2, color: isDone ? C.green : canSend ? C.amber : C.t3, cursor: isDone || !canSend ? 'default' : 'pointer', whiteSpace: 'nowrap', opacity: isDone || !canSend ? 0.6 : 1 }}>
                           {isDone ? `✓R${n}` : `R${n}`}

@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
       } else if (hasSMTP) {
         await sendViaSMTP(email.address, fromEmail, fromName, personalisedSubject, personalised, htmlBody)
       }
-      await supabase.from('emails').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', email.id)
+      await supabase.from('emails').update({ status: 'sent', sent_at: new Date().toISOString(), last_subject: personalisedSubject, last_body: personalised }).eq('id', email.id)
     } catch (err: any) {
       status = 'failed'
       errorMsg = err.message
