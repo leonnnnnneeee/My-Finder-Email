@@ -217,7 +217,7 @@ export default function Page() {
       const d = await r.json()
       if (d.emails) setEmails(d.emails)
     } catch {}
-  }, [fSt, currentUser])
+  }, [fSt, currentUser?.id])
 
   const loadSites = useCallback(async () => {
     try {
@@ -263,11 +263,22 @@ export default function Page() {
 
   useEffect(() => {
     const saved = localStorage.getItem('coincu_user')
-    if (saved) { try { setCurrentUser(JSON.parse(saved)) } catch {} }
-    loadEmails(); loadTemplates()
-  }, [loadEmails])
+    if (saved) {
+      try {
+        const u = JSON.parse(saved)
+        // Prevent setting a new object reference if the ID is the same to avoid infinite loops
+        if (currentUser?.id !== u.id) setCurrentUser(u)
+      } catch {}
+    }
+  }, []) // run once on mount
+
+  useEffect(() => {
+    loadEmails()
+    loadTemplates()
+  }, [loadEmails]) // loadEmails is wrapped in useCallback and only changes when currentUser changes. loadTemplates doesn't need to be in deps.
+
   useEffect(() => { if (tab === 'sites') loadSites() }, [tab, loadSites])
-  useEffect(() => { if (tab === 'users' && currentUser?.role === 'admin') loadUsers() }, [tab, currentUser])
+  useEffect(() => { if (tab === 'users' && currentUser?.role === 'admin') loadUsers() }, [tab, currentUser?.id])
 
   const addLog = (set: any, msg: string, t: Log['t'] = 'info') => set((p: Log[]) => [...p, { msg, t }])
   const addTgMsg = (text: string) => setTgMsgs(p => [{ text, time: new Date().toLocaleTimeString('vi-VN') }, ...p.slice(0, 9)])
