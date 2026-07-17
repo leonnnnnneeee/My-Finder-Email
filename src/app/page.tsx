@@ -626,145 +626,185 @@ export default function Page() {
     </div>
   )
 
-  return (
-    <div style={{ background: C.b0, minHeight: '100vh', color: C.t1, fontSize: 13 }}>
+  const TABS_NAV = [
+    { id: 'dash', icon: '🏠', label: 'Dashboard' },
+    { id: 'sites', icon: '🕷', label: 'Bài viết / Sites' },
+    { id: 'hunter', icon: '🎯', label: 'Hunter BOD' },
+    { id: 'send', icon: '✉️', label: 'Gửi & Remind' },
+    { id: 'tracking', icon: '👁', label: 'Tracking' },
+    { id: 'telegram', icon: '🤖', label: 'Telegram Bot' },
+    { id: 'settings', icon: '⚙️', label: 'Cài đặt' },
+  ]
 
-      {/* ── HEADER ── */}
-      <div style={{ background: C.b1, borderBottom: `1px solid ${C.bd}`, display: 'flex', alignItems: 'center', gap: 12, padding: '0 18px', height: 52 }}>
-        <div style={{ position: 'relative' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-            onClick={() => setShowUserMenu(p => !p)}>
-            <div style={{ position: 'relative' }}>
-              <img src="https://pbs.twimg.com/profile_images/1902957820418592768/xnPqDY4i_400x400.jpg" alt="Coincu" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover', display: 'block' }} />
-              {currentUser?.role === 'admin' && <span style={{ position: 'absolute', top: -3, right: -3, width: 9, height: 9, background: C.amber, borderRadius: '50%', border: `2px solid ${C.b1}` }} />}
-            </div>
-            <div>
-              <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 600, fontSize: 14 }}>Coincu</div>
-              <div style={{ fontSize: 10, color: C.t3, letterSpacing: '.05em', textTransform: 'uppercase' }}>Sales Intelligence</div>
-            </div>
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#09090b', color: '#f4f4f5', fontSize: 13, fontFamily: "'Inter', sans-serif" }}>
+      
+      {/* ── SIDEBAR ── */}
+      <div style={{ width: 260, background: '#18181b', borderRight: `1px solid #27272a`, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
+        {/* Logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '20px 24px', borderBottom: `1px solid #27272a` }}>
+          <div style={{ position: 'relative' }}>
+            <img src="https://pbs.twimg.com/profile_images/1902957820418592768/xnPqDY4i_400x400.jpg" alt="Coincu" style={{ width: 34, height: 34, borderRadius: 10, objectFit: 'cover', display: 'block' }} />
+            {currentUser?.role === 'admin' && <span style={{ position: 'absolute', top: -3, right: -3, width: 10, height: 10, background: '#f59e0b', borderRadius: '50%', border: `2px solid #18181b` }} />}
           </div>
-          {showUserMenu && (
-            <div style={{ position: 'absolute', top: 44, left: 0, zIndex: 999, background: C.b1, border: `1px solid ${C.bd}`, borderRadius: 10, padding: 6, minWidth: 180, boxShadow: '0 8px 24px rgba(0,0,0,.4)' }}>
-              <div style={{ padding: '8px 12px', borderBottom: `1px solid ${C.bd}`, marginBottom: 4 }}>
-                <div style={{ fontWeight: 600, fontSize: 13 }}>👤 {currentUser?.username}</div>
-                <div style={{ fontSize: 11, color: C.t3 }}>
-                  {currentUser?.role === 'admin' ? <span style={{ color: C.amber }}>● Admin</span> : <span style={{ color: C.t3 }}>● User</span>}
-                </div>
-              </div>
-              {currentUser?.role === 'admin' && (
-                <button onClick={() => { setTab('users'); setShowUserMenu(false) }}
-                  style={{ width: '100%', textAlign: 'left', padding: '7px 12px', background: 'none', border: 'none', color: C.t1, fontSize: 12, cursor: 'pointer', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8 }}
-                  onMouseEnter={e => (e.currentTarget.style.background = C.b3)}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
-                  👥 Quản lý Users
-                </button>
-              )}
-              <button onClick={() => { doLogout(); setShowUserMenu(false) }}
-                style={{ width: '100%', textAlign: 'left', padding: '7px 12px', background: 'none', border: 'none', color: '#ef4444', fontSize: 12, cursor: 'pointer', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 8 }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,.1)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
-                → Đăng xuất
+          <div>
+            <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontWeight: 700, fontSize: 16, color: '#fff' }}>Coincu Sales</div>
+            <div style={{ fontSize: 10, color: '#a1a1aa', letterSpacing: '.05em', textTransform: 'uppercase' }}>Intelligence</div>
+          </div>
+        </div>
+
+        {/* Nav Links */}
+        <div style={{ padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 6, flex: 1, overflowY: 'auto' }}>
+          <div style={{ fontSize: 10, fontWeight: 600, color: '#71717a', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8, paddingLeft: 8 }}>Menu Chính</div>
+          {TABS_NAV.map((t) => {
+            const active = tab === t.id
+            return (
+              <button key={t.id} onClick={() => setTab(t.id)} style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: 'none', 
+                background: active ? 'rgba(37,99,235,.15)' : 'transparent', 
+                color: active ? '#60a5fa' : '#a1a1aa',
+                borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: active ? 600 : 500,
+                transition: 'all .2s ease', textAlign: 'left'
+              }} onMouseEnter={e => !active && (e.currentTarget.style.background = 'rgba(255,255,255,.03)')} onMouseLeave={e => !active && (e.currentTarget.style.background = 'transparent')}>
+                <span style={{ fontSize: 15, opacity: active ? 1 : 0.7 }}>{t.icon}</span>
+                <span style={{ flex: 1 }}>{t.label}</span>
+                {t.id === 'send' && remindCount > 0 && <span style={{ fontSize: 10, background: 'rgba(239,68,68,.15)', color: '#ef4444', padding: '2px 6px', borderRadius: 20, fontWeight: 600 }}>{remindCount}</span>}
+                {t.id === 'tracking' && openEvents.length > 0 && <span style={{ fontSize: 10, background: 'rgba(16,185,129,.15)', color: '#10b981', padding: '2px 6px', borderRadius: 20, fontWeight: 600 }}>{openEvents.length}</span>}
               </button>
-            </div>
+            )
+          })}
+
+          {currentUser?.role === 'admin' && (
+            <>
+              <div style={{ fontSize: 10, fontWeight: 600, color: '#71717a', textTransform: 'uppercase', letterSpacing: '.08em', marginTop: 24, marginBottom: 8, paddingLeft: 8 }}>Quản trị</div>
+              <button onClick={() => setTab('users')} style={{
+                display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: 'none', 
+                background: tab === 'users' ? 'rgba(245,158,11,.15)' : 'transparent', 
+                color: tab === 'users' ? '#f59e0b' : '#a1a1aa',
+                borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: tab === 'users' ? 600 : 500, textAlign: 'left'
+              }}>
+                <span style={{ fontSize: 15 }}>👥</span>
+                Quản lý Users
+              </button>
+            </>
           )}
         </div>
-        <div style={{ width: 1, height: 28, background: C.bd, margin: '0 4px' }} />
-        <div style={{ fontSize: 11, color: C.t3 }}>
-          <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: C.green, marginRight: 5, verticalAlign: 'middle' }} />
-          {sites.length || 34} sites · crypto only · tracking live
-        </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 18 }}>
-          {hdrKpis.map(([l, v, c]) => (
-            <div key={l} style={{ textAlign: 'center' }}>
-              <div style={{ fontFamily: "'Space Grotesk',sans-serif", fontSize: 17, fontWeight: 600, color: c, lineHeight: 1 }}>{v}</div>
-              <div style={{ fontSize: 10, color: C.t3, marginTop: 2, textTransform: 'uppercase', letterSpacing: '.06em' }}>{l}</div>
-            </div>
-          ))}
-        </div>
 
-      </div>
-
-      {/* ── NAV ── */}
-      <div style={{ background: C.b1, borderBottom: `1px solid ${C.bd}`, display: 'flex', padding: '0 4px', overflowX: 'auto' }}>
-        {TABS.map(([k, l]) => (
-          <button key={k} onClick={() => setTab(k)} style={{
-            padding: '10px 13px', border: 'none', background: 'none', cursor: 'pointer', fontSize: 12,
-            fontWeight: tab === k ? 500 : 400, color: tab === k ? C.t1 : C.t2,
-            borderBottom: `2px solid ${tab === k ? C.blue : 'transparent'}`, marginBottom: -1,
-            whiteSpace: 'nowrap', transition: 'all .18s', fontFamily: "'DM Sans',sans-serif",
-            display: 'flex', alignItems: 'center', gap: 5,
-          }}>
-            {l}
-            {k === 'send' && remindCount > 0 && <span style={{ fontSize: 10, background: C.redDim, color: C.red, padding: '1px 6px', borderRadius: 20, border: `1px solid ${C.red}33` }}>{remindCount}</span>}
-            {false && k === 'contacts' && contacts.length > 0 && <span style={{ fontSize: 10, background: C.blueDim, color: C.cyan, padding: '1px 6px', borderRadius: 20, border: `1px solid ${C.cyan}33` }}>{contacts.length}</span>}
-            {k === 'tracking' && openEvents.length > 0 && <span style={{ fontSize: 10, background: C.greenDim, color: C.green, padding: '1px 6px', borderRadius: 20, border: `1px solid ${C.green}33` }}>{openEvents.length}</span>}
+        {/* Bottom Profile */}
+        <div style={{ padding: '16px', borderTop: `1px solid #27272a` }}>
+          <button onClick={() => { if(confirm('Đăng xuất?')) doLogout() }} style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: 'none', 
+            background: 'transparent', color: '#a1a1aa', width: '100%',
+            borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 500, textAlign: 'left'
+          }} onMouseEnter={e => (e.currentTarget.style.background = 'rgba(239,68,68,.1)')} onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+            <span style={{ fontSize: 15 }}>🚪</span>
+            Đăng xuất
           </button>
-        ))}
+        </div>
       </div>
 
-      {/* ── BODY ── */}
-      <div style={{ padding: 14, maxWidth: 1200, margin: '0 auto' }}>
-
-        {/* DASHBOARD */}
-        {tab === 'dash' && <>
-          <div style={{ ...S.card(`linear-gradient(135deg,${C.b1} 0%,#180e00 100%)`), border: `1px solid rgba(245,158,11,.25)`, marginBottom: 10 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-              <span style={{ color: C.amber, fontSize: 14 }}>⚠</span>
-              <span style={{ fontWeight: 600, color: C.amber, fontSize: 13, fontFamily: "'Space Grotesk',sans-serif" }}>Bộ lọc Crypto Only</span>
-              <span style={S.bdg(`rgba(245,158,11,.12)`, C.amber)}>Active</span>
+      {/* ── MAIN CONTENT ── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        
+        {/* TOP BAR */}
+        <div style={{ height: 64, borderBottom: `1px solid #27272a`, background: '#09090b', display: 'flex', alignItems: 'center', padding: '0 32px', gap: 16 }}>
+          {/* Global Search Placeholder */}
+          <div style={{ position: 'relative' }}>
+            <span style={{ position: 'absolute', left: 12, top: 10, fontSize: 13, color: '#71717a' }}>🔍</span>
+            <input placeholder="Tìm kiếm sites, contacts..." style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 8, padding: '9px 12px 9px 34px', color: '#fff', fontSize: 13, width: 280, outline: 'none', transition: 'border-color .2s' }} onFocus={e => e.target.style.borderColor = '#2563eb'} onBlur={e => e.target.style.borderColor = '#27272a'} />
+          </div>
+          
+          <div style={{ flex: 1 }} />
+          
+          {/* Topbar Info */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#a1a1aa' }}>
+              <span style={{ display: 'block', width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px rgba(16,185,129,0.5)' }} />
+              {sites.length || 34} sites tracking live
             </div>
-            <p style={{ fontSize: 11, color: '#9a7020', lineHeight: 1.6 }}>Chỉ lấy email từ dự án: blockchain, crypto, DeFi, NFT, Web3, token, coin, exchange, wallet. Dự án không liên quan bị bỏ qua tự động.</p>
+            <div style={{ width: 1, height: 24, background: '#27272a' }} />
+            <div style={{ display: 'flex', gap: 20 }}>
+              <div style={{ textAlign: 'center' }}><div style={{ fontSize: 15, fontWeight: 700, color: '#fff', lineHeight: 1 }}>{emails.length}</div><div style={{ fontSize: 10, color: '#71717a', marginTop: 3, textTransform: 'uppercase' }}>Tổng Email</div></div>
+              <div style={{ textAlign: 'center' }}><div style={{ fontSize: 15, fontWeight: 700, color: '#10b981', lineHeight: 1 }}>{sentCount}</div><div style={{ fontSize: 10, color: '#71717a', marginTop: 3, textTransform: 'uppercase' }}>Đã Gửi</div></div>
+            </div>
+            <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#18181b', border: `1px solid #27272a`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, cursor: 'pointer' }}>🔔</div>
           </div>
+        </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 10 }}>
-            <StatBox label="Tổng email" value={emails.length} sub="trong database" onClick={() => setTab('send')} />
-            <StatBox label="Chưa gửi" value={unsentCount} color={C.amber} sub="sẵn sàng outreach" onClick={unsentCount > 0 ? () => setTab('send') : undefined} />
-            <StatBox label="Đã gửi" value={sentCount} color={C.green} sub="tổng cộng" onClick={sentCount > 0 ? () => setTab('send') : undefined} />
-            <StatBox label="BOD Hunter" value={bodCount} color={C.purple} sub="CEO/CFO/CMO" onClick={bodCount > 0 ? () => setTab('hunter') : undefined} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 14 }}>
-            <StatBox label="Opened" value={openEvents.length} color={C.cyan} sub="đã mở email" onClick={openEvents.length > 0 ? () => setTab('tracking') : undefined} />
-            <StatBox label="Cần Remind" value={emails.filter(e => e.status==='sent' && !e.remind1_sent_at && e.sent_at && (Date.now() - new Date(e.sent_at).getTime()) >= 3*24*60*60*1000).length} color={C.red} sub="sau 3 ngày" onClick={() => setTab('send')} />
-            <StatBox label="R1 Đã gửi" value={emails.filter(e=>e.remind1_sent_at).length} color={C.amber} sub="follow-up 1" onClick={() => setTab('send')} />
-            <StatBox label="Sites" value={sites.length || 19} sub="đang theo dõi" onClick={() => setTab('sites')} />
-          </div>
+        {/* TAB CONTENT */}
+        <div style={{ padding: '32px 40px', overflowY: 'auto', flex: 1 }}>
 
-          <div style={{ fontSize: 10, fontWeight: 600, color: C.t3, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-            Quick Actions <div style={{ flex: 1, height: 1, background: C.bd }} />
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-            <button style={{ ...S.btn('xl'), ...{ background: C.blue, color: '#fff', border: 'none' } }} onClick={() => setTab('sites')}>🕷 Quét {sites.length || 34} sites</button>
-            <button style={S.btn('xl')} onClick={() => setTab('hunter')}>🎯 Hunter BOD</button>
-            <button style={S.btn('xl')} onClick={() => { setTab('send'); runAutoRemind() }}>🔔 Auto-remind</button>
-            <button style={{ ...S.btn('xl'), ...{ background: C.cyanDim, border: `1px solid rgba(0,212,255,.3)`, color: C.cyan } }} onClick={() => {
-              setContacts(DEMO_CONTACTS.map(d => ({ ...d, id: uid() })))
-              setEmails(DEMO_CONTACTS.map(c => ({ id: uid(), address: c.email, domain: c.email.split('@')[1], status: c.stage === 'closed' ? 'sent' as const : 'new' as const, contact_name: c.project, source_type: ['article', 'hunter_bod', 'hunter'][Math.floor(Math.random() * 3)] })))
-            }}>✨ Load demo data</button>
-          </div>
+          {/* DASHBOARD */}
+          {tab === 'dash' && <>
+            {/* Dashboard Header */}
+            <div style={{ marginBottom: 32, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0, fontFamily: "'Space Grotesk',sans-serif", color: '#fff', letterSpacing: '-0.02em' }}>Chào mừng trở lại, {currentUser?.username}! 👋</h1>
+                <span style={{ background: 'rgba(245,158,11,.1)', color: '#f59e0b', padding: '6px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, border: '1px solid rgba(245,158,11,.25)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 14 }}>⚠</span> Crypto Only Filter Active
+                </span>
+              </div>
+            </div>
 
-          {showDashLog && dashLog.length > 0 && <LogPane logs={dashLog} pct={dashPo} />}
+            {/* Focus Card */}
+            <div style={{ background: 'linear-gradient(135deg, rgba(37,99,235,.12) 0%, rgba(37,99,235,.02) 100%)', border: '1px solid rgba(37,99,235,.3)', borderRadius: 16, padding: '20px 24px', marginBottom: 32, display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 4px 20px rgba(0,0,0,0.2)' }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 15, color: '#60a5fa', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>Tập trung hôm nay 🎯</div>
+                <div style={{ fontSize: 13, color: '#a1a1aa' }}>Bạn có <strong style={{ color: '#f59e0b' }}>{unsentCount} email mới</strong> đang chờ gửi và <strong style={{ color: '#ef4444' }}>{remindCount} email</strong> cần follow-up ngay.</div>
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button style={{ ...S.btn('p'), background: '#2563eb', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'background .2s' }} onMouseEnter={e=>e.currentTarget.style.background='#1d4ed8'} onMouseLeave={e=>e.currentTarget.style.background='#2563eb'} onClick={() => setTab('send')}>→ Gửi email ngay</button>
+                <button style={{ ...S.btn('p'), background: 'rgba(37,99,235,.15)', color: '#60a5fa', border: '1px solid rgba(37,99,235,.3)', padding: '10px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'background .2s' }} onMouseEnter={e=>e.currentTarget.style.background='rgba(37,99,235,.25)'} onMouseLeave={e=>e.currentTarget.style.background='rgba(37,99,235,.15)'} onClick={() => { setTab('send'); runAutoRemind() }}>🔔 Auto Remind</button>
+              </div>
+            </div>
 
-          <div style={{ fontSize: 10, fontWeight: 600, color: C.t3, textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-            Activity feed <div style={{ flex: 1, height: 1, background: C.bd }} />
-          </div>
-          <div style={S.card()}>
-            {[
-              ['👁', 'rgba(0,212,255,.15)', 'AlphaDeFi opened email', '2 phút trước'],
-              ['📧', 'rgba(37,99,235,.15)', 'Gửi 8 email mới thành công', '15 phút trước'],
-              ['🎯', 'rgba(139,92,246,.15)', 'Hunter: +3 BOD từ cryptotimes.io', '1 giờ trước'],
-              ['⏰', 'rgba(245,158,11,.15)', 'Auto-remind: 2 follow-ups đã gửi', '8h sáng nay'],
-              ['🕷', 'rgba(16,185,129,.15)', 'Quét xong livebitcoinnews.com: +4 email', 'Hôm qua'],
-            ].map(([icon, bg, title, time]) => (
-              <div key={title as string} style={{ display: 'flex', gap: 10, padding: '8px 0', borderBottom: `1px solid rgba(255,255,255,.04)` }}>
-                <div style={{ width: 28, height: 28, borderRadius: 8, background: bg as string, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>{icon}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 2 }}>{title}</div>
-                  <div style={{ fontSize: 10, color: C.t3, fontFamily: "'JetBrains Mono',monospace" }}>{time}</div>
+            {/* Metric Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 16, marginBottom: 32 }}>
+              <StatBox label="Tổng email" value={emails.length} color="#fff" />
+              <StatBox label="Chưa gửi" value={unsentCount} color="#f59e0b" onClick={unsentCount > 0 ? () => setTab('send') : undefined} />
+              <StatBox label="Đã gửi" value={sentCount} color="#10b981" onClick={sentCount > 0 ? () => setTab('send') : undefined} />
+              <StatBox label="Cần Remind" value={remindCount} color="#ef4444" onClick={() => setTab('send')} />
+              <StatBox label="Opened" value={openEvents.length} color="#06b6d4" onClick={openEvents.length > 0 ? () => setTab('tracking') : undefined} />
+              <StatBox label="R1 Đã gửi" value={emails.filter(e=>e.remind1_sent_at).length} color="#8b5cf6" onClick={() => setTab('send')} />
+            </div>
+
+            {/* Quick Actions */}
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#71717a', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 12 }}>Thao tác nhanh</div>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 32 }}>
+              <button style={{ padding: '12px 20px', background: '#18181b', border: '1px solid #27272a', color: '#e4e4e7', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'all .2s' }} onMouseEnter={e=>{e.currentTarget.style.borderColor='#3f3f46';e.currentTarget.style.background='#27272a'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='#27272a';e.currentTarget.style.background='#18181b'}} onClick={() => setTab('sites')}>🕷 Quét {sites.length || 34} sites</button>
+              <button style={{ padding: '12px 20px', background: '#18181b', border: '1px solid #27272a', color: '#e4e4e7', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'all .2s' }} onMouseEnter={e=>{e.currentTarget.style.borderColor='#3f3f46';e.currentTarget.style.background='#27272a'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='#27272a';e.currentTarget.style.background='#18181b'}} onClick={() => setTab('hunter')}>🎯 Hunter BOD</button>
+              <button style={{ padding: '12px 20px', background: '#18181b', border: '1px solid #27272a', color: '#e4e4e7', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'all .2s' }} onMouseEnter={e=>{e.currentTarget.style.borderColor='#3f3f46';e.currentTarget.style.background='#27272a'}} onMouseLeave={e=>{e.currentTarget.style.borderColor='#27272a';e.currentTarget.style.background='#18181b'}} onClick={() => { setTab('send'); runAutoRemind() }}>🔔 Chạy Auto-remind</button>
+              <button style={{ padding: '12px 20px', background: 'rgba(0,212,255,.05)', border: '1px solid rgba(0,212,255,.2)', color: '#06b6d4', borderRadius: 8, fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'all .2s' }} onMouseEnter={e=>{e.currentTarget.style.background='rgba(0,212,255,.1)'}} onMouseLeave={e=>{e.currentTarget.style.background='rgba(0,212,255,.05)'}} onClick={() => {
+                setContacts(DEMO_CONTACTS.map(d => ({ ...d, id: uid() })))
+                setEmails(DEMO_CONTACTS.map(c => ({ id: uid(), address: c.email, domain: c.email.split('@')[1], status: c.stage === 'closed' ? 'sent' as const : 'new' as const, contact_name: c.project, source_type: ['article', 'hunter_bod', 'hunter'][Math.floor(Math.random() * 3)] })))
+              }}>✨ Load demo data</button>
+            </div>
+
+            {/* Main Content Areas */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 24 }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#71717a', textTransform: 'uppercase', letterSpacing: '.08em', marginBottom: 12 }}>Danh sách công việc & Log</div>
+                <div style={{ background: '#18181b', border: '1px solid #27272a', borderRadius: 12, overflow: 'hidden' }}>
+                  {[
+                    ['👁', 'rgba(6,182,212,.15)', '#06b6d4', 'AlphaDeFi opened email', '2 phút trước'],
+                    ['📧', 'rgba(37,99,235,.15)', '#3b82f6', 'Gửi 8 email mới thành công', '15 phút trước'],
+                    ['🎯', 'rgba(139,92,246,.15)', '#8b5cf6', 'Hunter: +3 BOD từ cryptotimes.io', '1 giờ trước'],
+                    ['⏰', 'rgba(245,158,11,.15)', '#f59e0b', 'Auto-remind: 2 follow-ups đã gửi', '8h sáng nay'],
+                    ['🕷', 'rgba(16,185,129,.15)', '#10b981', 'Quét xong livebitcoinnews.com: +4 email', 'Hôm qua'],
+                  ].map(([icon, bg, color, title, time], i) => (
+                    <div key={title as string} style={{ display: 'flex', gap: 12, padding: '12px 16px', borderBottom: i < 4 ? `1px solid #27272a` : 'none', alignItems: 'center' }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: bg as string, color: color as string, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>{icon}</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: '#e4e4e7', marginBottom: 2 }}>{title}</div>
+                        <div style={{ fontSize: 11, color: '#71717a', fontFamily: "'JetBrains Mono',monospace" }}>{time}</div>
+                      </div>
+                      <button style={{ fontSize: 11, color: '#71717a', background: 'none', border: 'none', cursor: 'pointer' }}>Xem chi tiết →</button>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
-        </>}
+            </div>
+          </>}
 
         {/* SITES */}
         {tab === 'sites' && <>
@@ -1457,6 +1497,7 @@ SMTP_PASS     = xxxx xxxx xxxx xxxx  (Gmail App Password)`}</pre>
           </div>
         </>}
 
+        </div>
       </div>
     </div>
   )
