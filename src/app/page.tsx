@@ -631,7 +631,6 @@ export default function Page() {
     { id: 'sites', icon: '🕷', label: 'Bài viết / Sites' },
     { id: 'hunter', icon: '🎯', label: 'Hunter BOD' },
     { id: 'send', icon: '✉️', label: 'Gửi & Remind' },
-    { id: 'tracking', icon: '👁', label: 'Tracking' },
     { id: 'telegram', icon: '🤖', label: 'Telegram Bot' },
     { id: 'settings', icon: '⚙️', label: 'Cài đặt' },
   ]
@@ -669,7 +668,6 @@ export default function Page() {
                 <span style={{ fontSize: 15, opacity: active ? 1 : 0.7 }}>{t.icon}</span>
                 <span style={{ flex: 1 }}>{t.label}</span>
                 {t.id === 'send' && remindCount > 0 && <span style={{ fontSize: 10, background: 'rgba(239,68,68,.15)', color: '#ef4444', padding: '2px 6px', borderRadius: 20, fontWeight: 600 }}>{remindCount}</span>}
-                {t.id === 'tracking' && openEvents.length > 0 && <span style={{ fontSize: 10, background: 'rgba(16,185,129,.15)', color: '#10b981', padding: '2px 6px', borderRadius: 20, fontWeight: 600 }}>{openEvents.length}</span>}
               </button>
             )
           })}
@@ -764,7 +762,6 @@ export default function Page() {
               <StatBox label="Chưa gửi" value={unsentCount} color="#f59e0b" onClick={unsentCount > 0 ? () => setTab('send') : undefined} />
               <StatBox label="Đã gửi" value={sentCount} color="#10b981" onClick={sentCount > 0 ? () => setTab('send') : undefined} />
               <StatBox label="Cần Remind" value={remindCount} color="#ef4444" onClick={() => setTab('send')} />
-              <StatBox label="Opened" value={openEvents.length} color="#06b6d4" onClick={openEvents.length > 0 ? () => setTab('tracking') : undefined} />
               <StatBox label="R1 Đã gửi" value={emails.filter(e=>e.remind1_sent_at).length} color="#8b5cf6" onClick={() => setTab('send')} />
             </div>
 
@@ -1357,41 +1354,7 @@ SMTP_PASS     = xxxx xxxx xxxx xxxx  (Gmail App Password)`}</pre>
           </div>
         </>}
 
-        {/* TRACKING */}
-        {tab === 'tracking' && <>
-          <div style={{ ...S.card(), background: `linear-gradient(135deg,${C.b1} 0%,#061520 100%)`, border: `1px solid rgba(0,212,255,.25)` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-              <span style={{ color: C.cyan }}>👁</span>
-              <span style={{ fontWeight: 600, fontSize: 13, fontFamily: "'Space Grotesk',sans-serif", color: C.cyan }}>Email open tracking — pixel 1×1</span>
-              <span style={S.bdg(`rgba(0,212,255,.08)`, C.cyan)}>Live</span>
-            </div>
-            <p style={{ fontSize: 11, color: C.cyanMid, lineHeight: 1.6, marginBottom: 8 }}>Khi contact mở email → ghi Supabase + ping Telegram ngay. Follow up trong 1 tiếng tăng reply rate 3x.</p>
-            <code style={{ display: 'block', background: '#03060d', border: `1px solid ${C.cyanDim}`, borderRadius: 6, padding: '6px 10px', fontSize: 11, color: C.t2, fontFamily: "'JetBrains Mono',monospace" }}>
-              {`<img src="/api/receipt?id={{email_id}}" width="1" height="1" style="display:none" />`}
-            </code>
-            <button style={{ ...S.btn('sm'), ...{ background: C.cyanDim, border: `1px solid rgba(0,212,255,.3)`, color: C.cyan, marginTop: 10 } }} onClick={simulateOpen}>▶ Giả lập mở email</button>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginBottom: 10 }}>
-            <StatBox label="Opened" value={openEvents.length} color={C.cyan} />
-            <StatBox label="Open rate" value={sentCount > 0 ? `${Math.round(openEvents.length / sentCount * 100)}%` : '0%'} color={C.green} />
-            <StatBox label="Chưa mở" value={Math.max(0, sentCount - openEvents.length)} />
-          </div>
-          <div style={{ background: C.b1, border: `1px solid ${C.bd}`, borderRadius: 10, overflow: 'hidden' }}>
-            {openEvents.length === 0
-              ? <div style={{ padding: 20, textAlign: 'center', color: C.t3, fontSize: 12 }}>Nhấn "Giả lập mở email" để xem event</div>
-              : openEvents.map((ev, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderBottom: `1px solid ${C.bd}` }}>
-                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: `rgba(0,212,255,.15)`, color: C.cyan, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, flexShrink: 0 }}>👁</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 500, fontSize: 12 }}>{ev.contact} <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, padding: '2px 7px', borderRadius: 20, background: `rgba(0,212,255,.1)`, color: C.cyan, border: `1px solid rgba(0,212,255,.2)`, fontWeight: 500 }}>👁 opened</span></div>
-                    <div style={{ fontSize: 10, color: C.t3, fontFamily: "'JetBrains Mono',monospace" }}>{ev.email}</div>
-                  </div>
-                  <span style={{ fontSize: 10, color: C.t3, fontFamily: "'JetBrains Mono',monospace" }}>{ev.time}</span>
-                </div>
-              ))
-            }
-          </div>
-        </>}
+
 
         {/* TELEGRAM */}
         {tab === 'telegram' && <>
