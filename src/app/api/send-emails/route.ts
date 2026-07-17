@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Bulk send
-  const { fromName, fromEmail, subject, body: bodyText } = body
+  const { fromName, fromEmail, subject, body: bodyText, owner_id } = body
   if (!fromName || !fromEmail || !subject || !bodyText)
     return NextResponse.json({ error: 'Thiếu thông tin: fromName, fromEmail, subject, body' }, { status: 400 })
 
@@ -113,8 +113,9 @@ export async function POST(req: NextRequest) {
   if (!hasResend && !hasSMTP)
     return NextResponse.json({ error: 'Chưa cấu hình SMTP hoặc RESEND_API_KEY' }, { status: 400 })
 
-  const { data: emails } = await supabase
-    .from('emails').select('*').eq('status', 'new').order('created_at', { ascending: true }).limit(50)
+  let q = supabase.from('emails').select('*').eq('status', 'new')
+  if (owner_id) q = q.eq('owner_id', owner_id)
+  const { data: emails } = await q.order('created_at', { ascending: true }).limit(50)
 
   if (!emails?.length)
     return NextResponse.json({ error: 'Không có email chưa gửi', sent: 0 }, { status: 400 })

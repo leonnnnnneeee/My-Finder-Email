@@ -491,7 +491,7 @@ export default function Page() {
     if (!confirm(`Gửi đến ${unsentCount} email?`)) return
     setSendLog([]); setSp(0); setSendDone(null); setBusy(true)
     try {
-      const r = await fetch('/api/send-emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fromName, fromEmail, subject, body }) })
+      const r = await fetch('/api/send-emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fromName, fromEmail, subject, body, owner_id: currentUser?.id }) })
       const d = await r.json()
       const skip = emails.filter(e => e.status === 'sent').length
       ;(d.results || []).forEach((x: any, i: number) => {
