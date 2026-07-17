@@ -164,6 +164,7 @@ export default function Page() {
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [sendingIds, setSendingIds] = useState<Set<string>>(new Set())
   const [sentIds, setSentIds] = useState<Set<string>>(new Set())
+  const [selectedEmails, setSelectedEmails] = useState<Set<string>>(new Set())
   const [templates, setTemplates] = useState<Template[]>([])
   const [showTemplates, setShowTemplates] = useState(false)
   const [sendLog, setSendLog] = useState<Log[]>([])
@@ -1063,7 +1064,21 @@ export default function Page() {
             <div style={{ ...S.card(), marginBottom: 10 }}>
               <div style={{ fontSize: 11, fontWeight: 600, color: C.t2, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.06em', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>📬 Tất cả emails trong database ({emails.length})</span>
-                <div style={{ display: 'flex', gap: 6 }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  {selectedEmails.size > 0 && (
+                    <button style={{ ...S.btn('sm'), background: 'rgba(239,68,68,.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,.3)' }} onClick={async () => {
+                      if (!confirm(`Xoá ${selectedEmails.size} email đã chọn?`)) return
+                      for (const id of Array.from(selectedEmails)) {
+                        await fetch('/api/emails/' + id, { method: 'DELETE' }).catch(() => {})
+                      }
+                      setSelectedEmails(new Set())
+                      loadEmails()
+                    }}>🗑 Xoá {selectedEmails.size} mục</button>
+                  )}
+                  <button style={{ ...S.btn('sm'), background: C.b3, color: C.t2, padding: '4px 8px', fontSize: 10 }} onClick={() => {
+                    if (selectedEmails.size === emails.length) setSelectedEmails(new Set())
+                    else setSelectedEmails(new Set(emails.map(e => e.id)))
+                  }}>{selectedEmails.size === emails.length ? 'Bỏ chọn hết' : 'Chọn hết'}</button>
                   <span style={{ ...S.bdg(fSt==='new' ? C.amberDim : C.blueDim, fSt==='new' ? C.amber : C.t3), fontSize: 10, cursor:'pointer' }} onClick={()=>setFSt(fSt==='new'?'all':'new')}>● Chưa gửi ({unsentCount})</span>
                   <span style={{ ...S.bdg(fSt==='sent' ? 'rgba(16,185,129,.2)' : C.blueDim, fSt==='sent' ? C.green : C.t3), fontSize: 10, cursor:'pointer' }} onClick={()=>setFSt(fSt==='sent'?'all':'sent')}>✓ Đã gửi ({sentCount})</span>
                 </div>
@@ -1074,7 +1089,11 @@ export default function Page() {
                   const project = e.domain?.split('.')[0]?.replace(/-/g,' ')?.replace(/\b\w/g, (c:string)=>c.toUpperCase()) || 'Project'
                   const displayName = e.source_type === 'hunter_bod' ? (e.contact_name || project) : project
                   return (
-                  <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: i < emails.length-1 ? `1px solid ${C.bd}` : 'none', opacity: e.status === 'sent' ? 0.6 : 1 }}>
+                  <div key={e.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderBottom: i < emails.length-1 ? `1px solid ${C.bd}` : 'none', opacity: e.status === 'sent' ? 0.6 : 1, background: selectedEmails.has(e.id) ? 'rgba(239,68,68,.05)' : 'transparent' }}>
+                    <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${selectedEmails.has(e.id) ? '#ef4444' : C.bd}`, background: selectedEmails.has(e.id) ? '#ef4444' : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, cursor: 'pointer' }}
+                      onClick={() => setSelectedEmails(p => { const n = new Set(p); if (n.has(e.id)) n.delete(e.id); else n.add(e.id); return n })}>
+                      {selectedEmails.has(e.id) && <span style={{ color: '#fff', fontSize: 10, lineHeight: 1 }}>✓</span>}
+                    </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 600 }}>{e.address}</div>
                       <div style={{ fontSize: 10, color: C.t3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', gap: 6 }}>
