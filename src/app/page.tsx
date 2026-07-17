@@ -222,7 +222,22 @@ export default function Page() {
     try {
       const r = await fetch('/api/crawl-site', { cache: 'no-store' })
       const d = await r.json()
-      if (d.sites) setSites(d.sites)
+      if (d.sites && d.sites.length > 0) {
+        setSites(d.sites)
+      } else if (d.sites && d.sites.length === 0) {
+        for (const preset of SITES_PRESET) {
+          try {
+            await fetch('/api/crawl-site', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ siteUrl: 'https://' + preset.d })
+            })
+          } catch {}
+        }
+        const r2 = await fetch('/api/crawl-site', { cache: 'no-store' })
+        const d2 = await r2.json()
+        if (d2.sites) setSites(d2.sites)
+      }
     } catch {}
   }, [])
 
