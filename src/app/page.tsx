@@ -1140,7 +1140,7 @@ export default function Page() {
                           const isDone = !!sentAt
                           const DAY = 3*24*60*60*1000
                           const daysLeft = prevSentAt ? Math.ceil((DAY - (Date.now() - new Date(prevSentAt).getTime())) / 86400000) : 99
-                          const canSend = !isDone && !!prevSentAt && daysLeft <= 0
+                          const canSend = !isDone && !!prevSentAt && daysLeft <= 0 && e.reply_status !== 'replied'
                           return (
                             <button key={n} disabled={isDone || !canSend}
                               onClick={() => { if (canSend) sendRemind(e.id, n) }}
@@ -1155,7 +1155,15 @@ export default function Page() {
                     {e.status === 'sent' && (
                       <button onClick={async () => {
                         const isReplied = e.reply_status === 'replied'
-                        await fetch(`/api/emails/${e.id}`, { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ reply_status: isReplied ? 'no_reply' : 'replied', replied_at: isReplied ? null : new Date().toISOString() }) })
+                        if (!isReplied) {
+                          if (confirm(`Đánh dấu Đã Reply cho TẤT CẢ email thuộc domain ${e.domain}?\n(Sẽ không gửi email mới và không nhắc nhở chung domain này nữa)`)) {
+                            await fetch('/api/reply-domain', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ domain: e.domain, owner_id: currentUser?.id, reply_status: 'replied' }) })
+                          } else {
+                            await fetch(`/api/emails/${e.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reply_status: 'replied', replied_at: new Date().toISOString() }) })
+                          }
+                        } else {
+                          await fetch(`/api/emails/${e.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reply_status: 'no_reply', replied_at: null }) })
+                        }
                         loadEmails()
                       }} title={e.reply_status === 'replied' ? 'Đã reply — click để bỏ đánh dấu' : 'Đánh dấu đã nhận reply'}
                         style={{ fontSize: 10, padding: '4px 8px', borderRadius: 6, border: `1px solid ${e.reply_status === 'replied' ? 'rgba(16,185,129,.4)' : C.bd}`, background: e.reply_status === 'replied' ? 'rgba(16,185,129,.15)' : C.b2, color: e.reply_status === 'replied' ? C.green : C.t3, cursor: 'pointer', whiteSpace: 'nowrap', fontWeight: e.reply_status === 'replied' ? 600 : 400 }}>
