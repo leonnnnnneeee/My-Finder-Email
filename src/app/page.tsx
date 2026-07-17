@@ -178,6 +178,10 @@ export default function Page() {
   const [showDashLog, setShowDashLog] = useState(false)
   const [urlInput, setUrlInput] = useState('')
   const [findMode, setFindMode] = useState('contact')
+  const [debugMsg, setDebugMsg] = useState('')
+  const [remindCount, setRemindCount] = useState(0)
+  const [sentCount, setSentCount] = useState(0)
+  const [unsentCount, setUnsentCount] = useState(0)
   const [manual, setManual] = useState('')
   const [hunterDoms, setHunterDoms] = useState('')
   const [hunterMode, setHunterMode] = useState('bod')
@@ -220,25 +224,44 @@ export default function Page() {
 
   const loadSites = useCallback(async () => {
     try {
+      setDebugMsg('Fetching /api/crawl-site...')
       const r = await fetch('/api/crawl-site', { cache: 'no-store' })
-      const d = await r.json()
-      if (d.sites && d.sites.length > 0) {
-        setSites(d.sites)
-      } else if (d.sites && d.sites.length === 0) {
-        for (const preset of SITES_PRESET) {
-          try {
-            await fetch('/api/crawl-site', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ siteUrl: 'https://' + preset.d })
-            })
-          } catch {}
-        }
-        const r2 = await fetch('/api/crawl-site', { cache: 'no-store' })
-        const d2 = await r2.json()
-        if (d2.sites) setSites(d2.sites)
+      if (!r.ok) {
+        setDebugMsg('HTTP Error: ' + r.status)
+        return
       }
-    } catch {}
+      const text = await r.text()
+      try {
+        const d = JSON.parse(text)
+        if (d.sites && d.sites.length > 0) {
+          setSites(d.sites)
+          setDebugMsg('Loaded ' + d.sites.length + ' sites.')
+        } else if (d.sites && d.sites.length === 0) {
+          setDebugMsg('0 sites found, seeding...')
+          for (const preset of SITES_PRESET) {
+            try {
+              await fetch('/api/crawl-site', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ siteUrl: 'https://' + preset.d })
+              })
+            } catch {}
+          }
+          const r2 = await fetch('/api/crawl-site', { cache: 'no-store' })
+          const d2 = await r2.json()
+          if (d2.sites) {
+            setSites(d2.sites)
+            setDebugMsg('Seeded & loaded ' + d2.sites.length + ' sites.')
+          }
+        } else {
+          setDebugMsg('d.sites missing. Data: ' + text.substring(0,50))
+        }
+      } catch(e: any) {
+        setDebugMsg('JSON Parse Error: ' + e.message + ' Data: ' + text.substring(0, 50))
+      }
+    } catch(e: any) {
+      setDebugMsg('Network/Fetch Error: ' + e.message)
+    }
   }, [])
 
   useEffect(() => {
@@ -743,6 +766,7 @@ export default function Page() {
               <input value={newSiteName} onChange={e => setNewSiteName(e.target.value)} placeholder="Tên site" style={{ ...S.inp, width: 130 }} />
               <button style={{ ...S.btn('p') }} onClick={addSiteAndCrawl}>+ Thêm</button>
             </div>
+            {debugMsg && <div style={{ marginTop: 8, padding: 8, background: '#fee2e2', color: '#991b1b', borderRadius: 4, fontSize: 11, fontFamily: 'monospace' }}>{debugMsg}</div>}
           </div>
 
           <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
