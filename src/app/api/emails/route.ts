@@ -23,9 +23,14 @@ export async function POST(req: NextRequest) {
   if (!address) return NextResponse.json({ error: 'Thiếu địa chỉ email' }, { status: 400 })
   const addr = address.toLowerCase().trim()
   const domain = bodyDomain || (source_url ? source_url.replace(/https?:\/\//, '').split('/')[0] : null)
-  const { data: existing } = await supabase.from('emails').select('id').eq('address', addr).maybeSingle()
-  if (existing) return NextResponse.json({ ok: true, existing: true })
   const owner_id = body.owner_id || null
+  const { data: existing } = await supabase.from('emails').select('id, owner_id').eq('address', addr).maybeSingle()
+  if (existing) {
+    if (!existing.owner_id && owner_id) {
+      await supabase.from('emails').update({ owner_id }).eq('id', existing.id)
+    }
+    return NextResponse.json({ ok: true, existing: true })
+  }
   const { data, error } = await supabase.from('emails').insert({ address: addr, source_url: source_url||null, domain, status: 'new', source_type: source_type||'manual', contact_name: contact_name||null, position: position||null, owner_id }).select().single()
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true, email: data })
