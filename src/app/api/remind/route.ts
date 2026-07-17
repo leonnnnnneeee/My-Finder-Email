@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
 
   const { subject, body } = await generateRemind(originalSubject, originalBody, remindNum, project)
 
-  const pixel = `<img src="${APP_URL}/api/track-open?id=${email.id}" width="1" height="1" style="display:none;border:0" />`
+  const pixel = `<img src="${APP_URL}/api/receipt?id=${email.id}" width="1" height="1" style="display:none;border:0" />`
   const html = `<div style="font-family:Arial,sans-serif;max-width:600px;line-height:1.7;color:#333">${body.replace(/\n/g, '<br>')}</div>${pixel}`
 
   try {

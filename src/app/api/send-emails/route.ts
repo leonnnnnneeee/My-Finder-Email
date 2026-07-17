@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
       .replace(/\{\{project\}\}/g, project)
       .replace(/\{\{email\}\}/g, email.address)
 
-    const pixel = `<img src="${APP_URL}/api/track-open?id=${email.id}" width="1" height="1" style="display:none;border:0" />`
+    const pixel = `<img src="${APP_URL}/api/receipt?id=${email.id}" width="1" height="1" style="display:none;border:0" />`
     const htmlBody = personalised.replace(/\n/g, '<br>') + pixel
 
     let status: 'success' | 'failed' = 'success'

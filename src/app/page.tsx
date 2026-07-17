@@ -221,8 +221,8 @@ export default function Page() {
 
   const loadSites = useCallback(async () => {
     try {
-      setDebugMsg('Fetching /api/crawl-site...')
-      const r = await fetch('/api/crawl-site', { cache: 'no-store' })
+      setDebugMsg('Fetching /api/competitors...')
+      const r = await fetch('/api/competitors', { cache: 'no-store' })
       if (!r.ok) {
         setDebugMsg('HTTP Error: ' + r.status)
         return
@@ -237,14 +237,14 @@ export default function Page() {
           setDebugMsg('0 sites found, seeding...')
           for (const preset of SITES_PRESET) {
             try {
-              await fetch('/api/crawl-site', {
+              await fetch('/api/competitors', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ siteUrl: 'https://' + preset.d })
               })
             } catch {}
           }
-          const r2 = await fetch('/api/crawl-site', { cache: 'no-store' })
+          const r2 = await fetch('/api/competitors', { cache: 'no-store' })
           const d2 = await r2.json()
           if (d2.sites) {
             setSites(d2.sites)
@@ -327,11 +327,11 @@ export default function Page() {
     setCrawlingSite(site.id); setCrawlLog([]); setCp(0); setStagedEmails([])
     addLog(setCrawlLog, `▶ Quét ${site.domain}...`, 'info')
     try {
-      const initD = await fetch('/api/crawl-site', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: site.url }) }).then(r => r.json())
+      const initD = await fetch('/api/competitors', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: site.url }) }).then(r => r.json())
       if (initD.error) { addLog(setCrawlLog, `✗ ${initD.error}`, 'err'); setCrawlingSite(null); return }
       const siteId = initD.siteId
       addLog(setCrawlLog, `  Đang lấy bài từ RSS...`, 'dim')
-      const urlsD = await fetch(`/api/crawl-site?action=urls&siteUrl=${encodeURIComponent(site.url)}`).then(r => r.json())
+      const urlsD = await fetch(`/api/competitors?action=urls&siteUrl=${encodeURIComponent(site.url)}`).then(r => r.json())
       const urls: string[] = urlsD.urls || []
       const preloaded = urlsD.preloadedEmails || {}
       if (!urls.length) { addLog(setCrawlLog, `  — Không có bài mới`, 'warn'); setCrawlingSite(null); loadSites(); return }
@@ -345,7 +345,7 @@ export default function Page() {
         const slug = isHunter ? `🎯 Hunter: ${url.replace('hunter://', '')}` : url.replace(/https?:\/\/[^/]+/, '').slice(0, 60)
         addLog(setCrawlLog, `\n  ${isHunter ? '🏢' : '📄'} ${slug}`, 'info')
         try {
-          const artD = await fetch('/api/crawl-site', {
+          const artD = await fetch('/api/competitors', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ articleUrl: url, siteUrl: site.url, siteId, preloadedEmails: preloaded, dryRun: true })
           }).then(r => r.json())
@@ -508,7 +508,7 @@ export default function Page() {
     const domain = newSiteUrl.replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
     if (sites.find(s => s.domain === domain)) return alert('Site đã tồn tại')
     try {
-      await fetch('/api/crawl-site', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: newSiteUrl.trim(), maxPages: 1 }) })
+      await fetch('/api/competitors', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ siteUrl: newSiteUrl.trim(), maxPages: 1 }) })
       setNewSiteUrl(''); setNewSiteName(''); loadSites()
     } catch {}
   }
@@ -775,7 +775,7 @@ export default function Page() {
             }}>🕷 Quét tất cả {sites.length} sites</button>
             <button style={{ ...S.btn('sm') }} onClick={async () => {
               if (!confirm('Reset lịch sử để quét lại tất cả bài từ đầu?')) return
-              const r = await fetch('/api/crawl-site', { method: 'DELETE' })
+              const r = await fetch('/api/competitors', { method: 'DELETE' })
               if (r.ok) { loadSites(); alert('Đã reset!') }
             }}>🔄 Reset lịch sử</button>
           </div>
@@ -1289,7 +1289,7 @@ SMTP_PASS     = xxxx xxxx xxxx xxxx  (Gmail App Password)`}</pre>
             </div>
             <p style={{ fontSize: 11, color: C.cyanMid, lineHeight: 1.6, marginBottom: 8 }}>Khi contact mở email → ghi Supabase + ping Telegram ngay. Follow up trong 1 tiếng tăng reply rate 3x.</p>
             <code style={{ display: 'block', background: '#03060d', border: `1px solid ${C.cyanDim}`, borderRadius: 6, padding: '6px 10px', fontSize: 11, color: C.t2, fontFamily: "'JetBrains Mono',monospace" }}>
-              {`<img src="/api/track-open?id={{email_id}}" width="1" height="1" style="display:none" />`}
+              {`<img src="/api/receipt?id={{email_id}}" width="1" height="1" style="display:none" />`}
             </code>
             <button style={{ ...S.btn('sm'), ...{ background: C.cyanDim, border: `1px solid rgba(0,212,255,.3)`, color: C.cyan, marginTop: 10 } }} onClick={simulateOpen}>▶ Giả lập mở email</button>
           </div>
