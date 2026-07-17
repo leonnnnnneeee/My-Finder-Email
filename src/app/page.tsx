@@ -737,7 +737,7 @@ export default function Page() {
         {/* SITES */}
         {tab === 'sites' && <>
           <div style={S.card()}>
-            <label style={{ fontSize: 11, color: C.t2, display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>Thêm site đối thủ mới</label>
+            <label style={{ fontSize: 11, color: C.t2, display: 'block', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>Quản lý Site Đối thủ (Cập nhật)</label>
             <div style={S.row}>
               <input value={newSiteUrl} onChange={e => setNewSiteUrl(e.target.value)} placeholder="https://newcryptosite.com/press-release/" style={{ ...S.inp, flex: 1 }} onKeyDown={e => e.key === 'Enter' && addSiteAndCrawl()} />
               <input value={newSiteName} onChange={e => setNewSiteName(e.target.value)} placeholder="Tên site" style={{ ...S.inp, width: 130 }} />
