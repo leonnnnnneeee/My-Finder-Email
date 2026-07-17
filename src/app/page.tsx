@@ -141,7 +141,7 @@ export default function Page() {
   const [emails, setEmails] = useState<Email[]>([])
   const [sites, setSites] = useState<Site[]>([])
   const [contacts, setContacts] = useState<Contact[]>([])
-  const [openEvents, setOpenEvents] = useState<{ contact: string; email: string; time: string }[]>([])
+
   const [tgMsgs, setTgMsgs] = useState<{ text: string; time: string }[]>([])
   const [busy, setBusy] = useState(false)
   const [sel, setSel] = useState<Set<string>>(new Set())
@@ -550,14 +550,6 @@ export default function Page() {
     } catch { setSmtpOk(false) }
   }
 
-  async function simulateOpen() {
-    const e = emails.find(x => x.status === 'sent') || emails[0]
-    if (!e) return
-    const ev = { contact: e.contact_name || e.address, email: e.address, time: new Date().toLocaleTimeString('vi-VN') }
-    setOpenEvents(p => [ev, ...p])
-    addTgMsg(`👁 ${ev.contact} vừa mở email!\n📧 ${ev.email}`)
-  }
-
   const filteredEmails = emails.filter(e => {
     const ms = fSt === 'all' || e.status === fSt
     const mr = fSrc === 'all' || e.source_type === fSrc
@@ -580,18 +572,6 @@ export default function Page() {
     if (s === 'failed') return S.bdg(C.redDim, C.red)
     return S.bdg(C.amberDim, C.amber)
   }
-
-  const TABS: [string, string][] = [
-    ['dash', '🏠 Dashboard'], ['sites', '🕷 Bài viết'], ['hunter', '🎯 Hunter BOD'],
-    ['send', '✉️ Gửi & Remind'], ['tracking', '👁 Tracking'], ['settings', '⚙️ Settings'],
-  ]
-
-  const hdrKpis = [
-    ['Emails', emails.length, C.t1], ['Chưa gửi', unsentCount, C.amber],
-    ['Đã gửi', sentCount, C.green], ['Opened', openEvents.length, C.cyan],
-    ['Remind', remindCount, C.red],
-  ] as [string, number, string][]
-
   // ─── LOGIN SCREEN ───
   if (!currentUser) return (
     <div style={{ background: C.b0, minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.t1 }}>
