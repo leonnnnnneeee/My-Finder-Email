@@ -39,7 +39,7 @@ Return ONLY valid JSON, no markdown:
         if (!addr || !addr.includes('@')) continue
         if (existingSet.has(addr)) continue
         const { data, error } = await supabase.from('emails')
-          .insert({ address: addr, source_url: url, domain, status: 'new' })
+          .insert({ address: addr, source_url: url, domain, status: 'new', owner_id: body.owner_id || null })
           .select().single()
         if (!error && data) {
           existingSet.add(addr)

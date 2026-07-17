@@ -109,6 +109,7 @@ export async function POST(req: NextRequest) {
           position: e.position || null,
           confidence: e.confidence || null,
           source_type: isBOD(e.position || '') ? 'hunter_bod' : 'hunter',
+          owner_id: body.owner_id || null
         })
 
         if (!insertErr) {

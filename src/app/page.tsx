@@ -294,7 +294,7 @@ export default function Page() {
     setFindLog([]); setFp(0); setBusy(true)
     addLog(setFindLog, `▶ Quét ${urls.length} URL...`, 'info')
     try {
-      const r = await fetch('/api/find-emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ urls, mode: findMode }) })
+      const r = await fetch('/api/find-emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ urls, mode: findMode, owner_id: currentUser?.id }) })
       const d = await r.json()
       for (let i = 0; i < (d.results || []).length; i++) {
         const x = d.results[i]; setFp(Math.round((i + 1) / d.results.length * 100))
@@ -309,7 +309,7 @@ export default function Page() {
     if (!manual.trim()) return
     const [addr, src] = manual.split(',').map(s => s.trim())
     try {
-      const r = await fetch('/api/emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address: addr, source_url: src || null }) })
+      const r = await fetch('/api/emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ address: addr, source_url: src || null, owner_id: currentUser?.id }) })
       const d = await r.json()
       if (d.error) return alert(d.error)
       setManual(''); loadEmails()
@@ -322,7 +322,7 @@ export default function Page() {
     setHunterLog([]); setHp(0); setBusy(true)
     addLog(setHunterLog, `▶ Hunter.io — ${hunterMode === 'bod' ? 'BOD' : 'All'} từ ${domains.length} domain...`, 'info')
     try {
-      const r = await fetch('/api/hunter', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ domains, mode: hunterMode }) })
+      const r = await fetch('/api/hunter', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ domains, mode: hunterMode, owner_id: currentUser?.id }) })
       const d = await r.json()
       for (let i = 0; i < (d.results || []).length; i++) {
         const x = d.results[i]; setHp(Math.round((i + 1) / d.results.length * 100))
@@ -455,7 +455,7 @@ export default function Page() {
       const r = await fetch('/api/emails', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: e.addr, domain: e.domain, source_url: e.articleUrl, source_type: e.src, contact_name: e.name||null, position: e.pos||null })
+        body: JSON.stringify({ address: e.addr, domain: e.domain, source_url: e.articleUrl, source_type: e.src, contact_name: e.name||null, position: e.pos||null, owner_id: currentUser?.id })
       })
       if ((await r.json()).ok) saved++
     }
