@@ -207,13 +207,12 @@ export default function Page() {
     try {
       const p = new URLSearchParams()
       if (fSt !== 'all') p.set('status', fSt)
-      // Get user from state or localStorage
       let userId = currentUser?.id
       if (!userId) {
         try { const s = localStorage.getItem('coincu_user'); if (s) userId = JSON.parse(s).id } catch {}
       }
       if (userId) p.set('owner', userId)
-      const r = await fetch(`/api/emails?${p}`)
+      const r = await fetch(`/api/emails?${p}`, { cache: 'no-store' })
       const d = await r.json()
       if (d.emails) setEmails(d.emails)
     } catch {}
@@ -221,7 +220,7 @@ export default function Page() {
 
   const loadSites = useCallback(async () => {
     try {
-      const r = await fetch('/api/crawl-site')
+      const r = await fetch('/api/crawl-site', { cache: 'no-store' })
       const d = await r.json()
       if (d.sites) setSites(d.sites)
     } catch {}
