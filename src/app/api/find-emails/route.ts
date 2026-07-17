@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export async function POST(req: NextRequest) {
-  const { urls, mode } = await req.json()
+  const { urls, mode, owner_id } = await req.json()
   if (!urls?.length) return NextResponse.json({ error: 'Không có URL' }, { status: 400 })
 
   // Load existing emails for dedup
@@ -39,7 +39,7 @@ Return ONLY valid JSON, no markdown:
         if (!addr || !addr.includes('@')) continue
         if (existingSet.has(addr)) continue
         const { data, error } = await supabase.from('emails')
-          .insert({ address: addr, source_url: url, domain, status: 'new', owner_id: body.owner_id || null })
+          .insert({ address: addr, source_url: url, domain, status: 'new', owner_id: owner_id || null })
           .select().single()
         if (!error && data) {
           existingSet.add(addr)
