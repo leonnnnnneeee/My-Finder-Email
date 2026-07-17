@@ -179,9 +179,6 @@ export default function Page() {
   const [urlInput, setUrlInput] = useState('')
   const [findMode, setFindMode] = useState('contact')
   const [debugMsg, setDebugMsg] = useState('')
-  const [remindCount, setRemindCount] = useState(0)
-  const [sentCount, setSentCount] = useState(0)
-  const [unsentCount, setUnsentCount] = useState(0)
   const [manual, setManual] = useState('')
   const [hunterDoms, setHunterDoms] = useState('')
   const [hunterMode, setHunterMode] = useState('bod')
@@ -821,7 +818,7 @@ export default function Page() {
                 </div>
               </div>
               <div style={{ background: C.b0, border: `1px solid ${C.bd}`, borderRadius: 8, overflow: 'hidden' }}>
-                {stagedEmails.map((e, i) => (
+                {stagedEmails.slice(0, 100).map((e, i) => (
                   <div key={e.addr+i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', borderBottom: i < stagedEmails.length-1 ? `1px solid ${C.bd}` : 'none', background: e.checked ? 'rgba(16,185,129,.06)' : 'transparent', cursor: 'pointer' }}
                     onClick={() => setStagedEmails(p => p.map((x,j) => j===i ? {...x, checked: !x.checked} : x))}>
                     <div style={{ width: 16, height: 16, borderRadius: 4, border: `2px solid ${e.checked ? C.green : C.bd}`, background: e.checked ? C.green : 'transparent', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -960,7 +957,7 @@ export default function Page() {
           <div style={{ background: C.b1, border: `1px solid ${C.bd}`, borderRadius: 10, overflow: 'hidden' }}>
             {filteredContacts.length === 0
               ? <div style={{ padding: 24, textAlign: 'center', color: C.t3, fontSize: 12 }}>Không có kết quả — nhấn Demo để thêm dữ liệu mẫu</div>
-              : filteredContacts.map((c, i) => {
+              : filteredContacts.slice(0, 100).map((c, i) => {
                 const [bg, col] = SC[c.stage] || SC.new
                 const [ab, ac] = AV_COLORS[i % 6]
                 return (
@@ -1061,7 +1058,7 @@ export default function Page() {
                 </div>
               </div>
               <div style={{ background: C.b0, border: `1px solid ${C.bd}`, borderRadius: 8, maxHeight: 300, overflowY: 'auto' }}>
-                {emails.map((e, i) => {
+                {emails.slice(0, 100).map((e, i) => {
                   // Always use domain as project name
                   const project = e.domain?.split('.')[0]?.replace(/-/g,' ')?.replace(/\b\w/g, (c:string)=>c.toUpperCase()) || 'Project'
                   const displayName = e.source_type === 'hunter_bod' ? (e.contact_name || project) : project
