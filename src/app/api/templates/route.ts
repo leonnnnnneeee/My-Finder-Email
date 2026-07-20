@@ -1,22 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 
 export async function GET() {
-  const { data } = await supabase.from('email_templates').select('*').order('created_at')
-  return NextResponse.json({ templates: data || [] })
+  try {
+    const { rows } = await db.query('SELECT * FROM email_templates ORDER BY created_at ASC')
+    return NextResponse.json({ templates: rows || [] })
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 }
 
 export async function POST(req: NextRequest) {
-  const body = await req.json()
-  const { data, error } = await supabase.from('email_templates').insert({
-    name: body.name, subject: body.subject, body: body.body, owner_id: body.owner_id || null
-  }).select().single()
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ ok: true, template: data })
+  try {
+    const body = await req.json()
+    const { rows } = await db.query(
+      'INSERT INTO email_templates (name, subject, body, owner_id) VALUES ($1, $2, $3, $4) RETURNING *',
+      [body.name, body.subject, body.body, body.owner_id || null]
+    )
+    return NextResponse.json({ ok: true, template: rows[0] })
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 }
 
 export async function DELETE(req: NextRequest) {
-  const { id } = await req.json()
-  await supabase.from('email_templates').delete().eq('id', id)
-  return NextResponse.json({ ok: true })
+  try {
+    const { id } = await req.json()
+    await db.query('DELETE FROM email_templates WHERE id = $1', [id])
+    return NextResponse.json({ ok: true })
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 }

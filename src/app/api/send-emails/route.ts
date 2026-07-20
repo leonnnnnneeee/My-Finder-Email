@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import nodemailer from 'nodemailer'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://my-finder-email-v2bh.vercel.app'
 
@@ -113,15 +113,15 @@ export async function POST(req: NextRequest) {
   if (!hasResend && !hasSMTP)
     return NextResponse.json({ error: 'Chưa cấu hình SMTP hoặc RESEND_API_KEY' }, { status: 400 })
 
-  let q = supabase.from('emails').select('*').eq('status', 'new')
-  if (owner_id) q = q.eq('owner_id', owner_id)
-  let { data: emails, error: selErr } = await q.order('created_at', { ascending: true }).limit(50)
-  const errMsg = String(selErr?.message || selErr || '')
-
-  if (selErr && errMsg.includes('owner_id')) {
-    const retry = await supabase.from('emails').select('*').eq('status', 'new').order('created_at', { ascending: true }).limit(50)
-    emails = retry.data
+  let query = 'SELECT * FROM emails WHERE status = $1'
+  let params: any[] = ['new']
+  if (owner_id) {
+    query += ' AND owner_id = $2'
+    params.push(owner_id)
   }
+  query += ' ORDER BY created_at ASC LIMIT 50'
+  
+  let { rows: emails } = await db.query(query, params)
 
   if (!emails?.length)
     return NextResponse.json({ error: 'Không có email chưa gửi', sent: 0 }, { status: 400 })
@@ -161,19 +161,25 @@ export async function POST(req: NextRequest) {
       } else if (hasSMTP) {
         await sendViaSMTP(email.address, fromEmail, fromName, personalisedSubject, personalised, htmlBody)
       }
-      const { error: updateErr } = await supabase.from('emails').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', email.id)
-      if (updateErr) throw new Error(`DB Update Error: ${updateErr.message}`)
+      await db.query(
+        'UPDATE emails SET status = $1, sent_at = $2, last_subject = $3 WHERE id = $4',
+        ['sent', new Date().toISOString(), personalisedSubject, email.id]
+      )
     } catch (err: any) {
       status = 'failed'
       errorMsg = err.message
-      await supabase.from('emails').update({ status: 'failed' }).eq('id', email.id)
+      await db.query('UPDATE emails SET status = $1 WHERE id = $2', ['failed', email.id])
     }
 
-    const { error: logErr } = await supabase.from('send_logs').insert({
-      email_id: email.id, subject: personalisedSubject, body: personalised,
-      from_name: fromName, from_email: fromEmail, status, error_msg: errorMsg,
-    })
-    if (logErr) console.error('Log Insert Error:', logErr.message)
+    try {
+      await db.query(
+        `INSERT INTO send_logs (email_id, subject, body, from_name, from_email, status, error_msg)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [email.id, personalisedSubject, personalised, fromName, fromEmail, status, errorMsg]
+      )
+    } catch (logErr: any) {
+      console.error('Log Insert Error:', logErr.message)
+    }
     results.push({ address: email.address, status, error: errorMsg })
   }
 

@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 
 export async function GET(req: NextRequest) {
   const id = req.nextUrl.searchParams.get('id')
   if (id) {
-    const { data } = await supabase.from('emails').select('open_count').eq('id', id).single()
-    await supabase.from('emails').update({ 
-      opened_at: new Date().toISOString(),
-      open_count: (data?.open_count || 0) + 1
-    }).eq('id', id)
+    try {
+      await db.query(
+        'UPDATE emails SET opened_at = CURRENT_TIMESTAMP, open_count = COALESCE(open_count, 0) + 1 WHERE id = $1',
+        [id]
+      )
+    } catch (e) {
+      // ignore silently
+    }
   }
   // Return 1x1 transparent pixel
   const pixel = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64')

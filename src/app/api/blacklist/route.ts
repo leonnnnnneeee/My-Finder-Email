@@ -1,18 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 
 export async function GET() {
-  const { data } = await supabase.from('email_blacklist').select('*').order('created_at', { ascending: false })
-  return NextResponse.json({ blacklist: data || [] })
+  try {
+    const { rows } = await db.query('SELECT * FROM email_blacklist ORDER BY created_at DESC')
+    return NextResponse.json({ blacklist: rows })
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 }
+
 export async function POST(req: NextRequest) {
-  const { domain, email, reason } = await req.json()
-  const { error } = await supabase.from('email_blacklist').insert({ domain: domain?.toLowerCase(), email: email?.toLowerCase(), reason: reason || 'not interested' })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ ok: true })
+  try {
+    const { domain, email, reason } = await req.json()
+    await db.query(
+      'INSERT INTO email_blacklist (domain, email, reason) VALUES ($1, $2, $3)', 
+      [domain?.toLowerCase(), email?.toLowerCase(), reason || 'not interested']
+    )
+    return NextResponse.json({ ok: true })
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 }
+
 export async function DELETE(req: NextRequest) {
-  const { id } = await req.json()
-  await supabase.from('email_blacklist').delete().eq('id', id)
-  return NextResponse.json({ ok: true })
+  try {
+    const { id } = await req.json()
+    await db.query('DELETE FROM email_blacklist WHERE id = $1', [id])
+    return NextResponse.json({ ok: true })
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 }

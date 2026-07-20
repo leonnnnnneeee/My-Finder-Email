@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 import { Resend } from 'resend'
 import nodemailer from 'nodemailer'
 
@@ -98,7 +98,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid params' }, { status: 400 })
   }
 
-  const { data: email } = await supabase.from('emails').select('*').eq('id', emailId).single()
+  const { rows } = await db.query('SELECT * FROM emails WHERE id = $1', [emailId])
+  const email = rows[0]
   if (!email) return NextResponse.json({ error: 'Email not found' }, { status: 404 })
 
   // Always use domain as project name - contact_name may be article title
@@ -147,11 +148,14 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    await supabase.from('emails').update({
-      [`remind${remindNum}_sent_at`]: new Date().toISOString(),
-      [`remind${remindNum}_status`]: 'sent',
-      [`remind${remindNum}_subject`]: subject,
-    }).eq('id', emailId)
+    const updateQuery = `
+      UPDATE emails 
+      SET remind${remindNum}_sent_at = $1, 
+          remind${remindNum}_status = 'sent', 
+          remind${remindNum}_subject = $2 
+      WHERE id = $3
+    `
+    await db.query(updateQuery, [new Date().toISOString(), subject, emailId])
 
     return NextResponse.json({ ok: true, subject, body })
   } catch (e: any) {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 
 const HUNTER_KEYS = [process.env.HUNTER_API_KEY, process.env.HUNTER_API_KEY_2, process.env.HUNTER_API_KEY_3].filter(Boolean) as string[]
 let _hkIdx = 0
@@ -54,8 +54,8 @@ export async function POST(req: NextRequest) {
   if (!domains?.length) return NextResponse.json({ error: 'Không có domain', results: [] }, { status: 400 })
 
   // Load email đã có để dedup
-  const { data: existing } = await supabase.from('emails').select('address')
-  const existingSet = new Set((existing || []).map((e: any) => e.address.toLowerCase()))
+  const { rows: existing } = await db.query('SELECT address FROM emails')
+  const existingSet = new Set(existing.map((e: any) => e.address.toLowerCase()))
 
   const results: any[] = []
 
@@ -99,20 +99,23 @@ export async function POST(req: NextRequest) {
           continue
         }
 
-        // Insert vào Supabase
-        const { error: insertErr } = await supabase.from('emails').insert({
-          address: addr,
-          source_url: `https://${cleanDomain}`,
-          domain: cleanDomain,
-          status: 'new',
-          contact_name: `${e.first_name || ''} ${e.last_name || ''}`.trim() || null,
-          position: e.position || null,
-          confidence: e.confidence || null,
-          source_type: isBOD(e.position || '') ? 'hunter_bod' : 'hunter',
-          owner_id: body.owner_id || null
-        })
-
-        if (!insertErr) {
+        // Insert vào DB
+        try {
+          await db.query(
+            `INSERT INTO emails (address, source_url, domain, status, contact_name, position, source_type, owner_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (address) DO NOTHING`,
+            [
+              addr, 
+              `https://${cleanDomain}`, 
+              cleanDomain, 
+              'new', 
+              `${e.first_name || ''} ${e.last_name || ''}`.trim() || null, 
+              e.position || null, 
+              isBOD(e.position || '') ? 'hunter_bod' : 'hunter', 
+              body.owner_id || null
+            ]
+          )
+          
           existingSet.add(addr)
           addedList.push({
             addr,
@@ -121,6 +124,8 @@ export async function POST(req: NextRequest) {
             confidence: e.confidence || 0,
             isBOD: isBOD(e.position || '')
           })
+        } catch (dbErr) {
+          // ignore error for single email insert
         }
       }
 

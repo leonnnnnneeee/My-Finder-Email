@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 
 const HUNTER_KEYS = [
   process.env.HUNTER_API_KEY,
@@ -189,11 +189,13 @@ export async function GET(req: NextRequest) {
     const feeds = SITE_FEEDS[domain] || [`https://${domain}/feed/`]
 
     // Lấy danh sách đã quét để bỏ qua
-    const { data: site } = await supabase.from('competitor_sites').select('id').eq('domain', domain).maybeSingle()
-    const { data: crawled } = site
-      ? await supabase.from('crawled_pages').select('page_url').eq('site_id', site.id)
-      : { data: [] }
-    const crawledSet = new Set((crawled || []).map((r: any) => r.page_url))
+    const { rows: siteRows } = await db.query('SELECT id FROM competitor_sites WHERE domain = $1', [domain])
+    const site = siteRows[0]
+    let crawledSet = new Set<string>()
+    if (site) {
+      const { rows } = await db.query('SELECT page_url FROM crawled_pages WHERE site_id = $1', [site.id])
+      crawledSet = new Set(rows.map(r => r.page_url))
+    }
 
     const articleMap = new Map<string, { title: string; emails: string[] }>()
     const errors: string[] = []
@@ -345,30 +347,21 @@ export async function GET(req: NextRequest) {
   }
 
   // GET default: danh sách sites
-  let q = supabase
-    .from('competitor_sites')
-    .select('*')
+  try {
+    const owner = searchParams.get('owner')
+    let query = 'SELECT * FROM competitor_sites'
+    let params: any[] = []
+    if (owner) {
+      query += ' WHERE owner_id = $1'
+      params.push(owner)
+    }
+    query += ' ORDER BY domain ASC'
     
-  const owner = searchParams.get('owner')
-  if (owner) q = q.eq('owner_id', owner)
-  
-  let { data: sites, error } = await q.order('domain', { ascending: true })
-  const errMsg = String(error?.message || error || '')
-  
-  if (error && errMsg.includes('owner_id')) {
-    const retry = await supabase
-      .from('competitor_sites')
-      .select('*')
-      .order('domain', { ascending: true })
-    sites = retry.data
-    error = retry.error
+    let { rows: sites } = await db.query(query, params)
+    return NextResponse.json({ sites: sites || [] })
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
-  
-  if (error) {
-    return NextResponse.json({ error: String(error?.message || error) }, { status: 500 })
-  }
-  
-  return NextResponse.json({ sites: sites || [] })
 }
 
 // POST: init site hoặc xử lý 1 article
@@ -381,28 +374,26 @@ export async function POST(req: NextRequest) {
     const domain = siteUrl.replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
     
     // Create the insert payload, dynamically adding owner_id if provided
-    const payload: any = { url: siteUrl, domain, last_crawled_at: new Date().toISOString() }
-    if (owner_id) payload.owner_id = owner_id
-
-    let { data: site, error } = await supabase
-      .from('competitor_sites')
-      .upsert(payload, { onConflict: 'url' })
-      .select().single()
-      
-    const errMsg = String(error?.message || error || '')
-    // Fallback if owner_id doesn't exist in the database schema
-    if (error && errMsg.includes('owner_id')) {
-      delete payload.owner_id
-      const retry = await supabase
-        .from('competitor_sites')
-        .upsert(payload, { onConflict: 'url' })
-        .select().single()
-      site = retry.data
-      error = retry.error
+    try {
+      const lastCrawled = new Date().toISOString()
+      let site
+      if (owner_id) {
+        const res = await db.query(
+          'INSERT INTO competitor_sites (url, domain, last_crawled_at, owner_id) VALUES ($1, $2, $3, $4) ON CONFLICT (url) DO UPDATE SET last_crawled_at = EXCLUDED.last_crawled_at RETURNING *',
+          [siteUrl, domain, lastCrawled, owner_id]
+        )
+        site = res.rows[0]
+      } else {
+        const res = await db.query(
+          'INSERT INTO competitor_sites (url, domain, last_crawled_at) VALUES ($1, $2, $3) ON CONFLICT (url) DO UPDATE SET last_crawled_at = EXCLUDED.last_crawled_at RETURNING *',
+          [siteUrl, domain, lastCrawled]
+        )
+        site = res.rows[0]
+      }
+      return NextResponse.json({ siteId: site?.id, domain })
+    } catch (error: any) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
     }
-
-    if (error) return NextResponse.json({ error: String(error?.message || error) }, { status: 500 })
-    return NextResponse.json({ siteId: site?.id, domain })
   }
 
   // Xử lý 1 article
@@ -418,19 +409,18 @@ export async function POST(req: NextRequest) {
     
     try {
       const hunterResults = await hunterBOD(targetDomain)
-      const { data: existing } = await supabase.from('emails').select('address')
-      const emailSet = new Set((existing || []).map((e: any) => e.address.toLowerCase()))
+      const { rows: existing } = await db.query('SELECT address FROM emails')
+      const emailSet = new Set(existing.map((e: any) => e.address.toLowerCase()))
       
       for (const h of hunterResults) {
         if (!h.email) continue
         found.push({ addr: h.email, src: 'hunter_bod', name: h.name, domain: targetDomain, pos: h.position })
         logs.push(`  → [Hunter${isBOD(h.position) ? 'BOD👑' : ''}] ${h.email} (${h.name})`)
         if (!dryRun && !emailSet.has(h.email)) {
-          await supabase.from('emails').insert({
-            address: h.email, source_url: `https://${targetDomain}`,
-            domain: targetDomain, status: 'new',
-            source_type: 'hunter_bod', contact_name: h.name || null, position: h.position || null,
-          })
+          await db.query(
+            'INSERT INTO emails (address, source_url, domain, status, source_type, contact_name, position) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (address) DO NOTHING',
+            [h.email, `https://${targetDomain}`, targetDomain, 'new', 'hunter_bod', h.name || null, h.position || null]
+          )
         }
       }
       if (hunterResults.length === 0) logs.push('  — No emails found')
@@ -439,10 +429,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (!dryRun && siteId) {
-      await supabase.from('crawled_pages').insert({
-        site_id: siteId, page_url: articleUrl,
-        page_title: projectName, emails_found: found.length,
-      }).select()
+      await db.query(
+        'INSERT INTO crawled_pages (site_id, page_url, page_title, emails_found) VALUES ($1, $2, $3, $4) ON CONFLICT (page_url) DO NOTHING',
+        [siteId, articleUrl, projectName, JSON.stringify(found)]
+      )
     }
 
     return NextResponse.json({ found, saved: dryRun ? [] : found.map(f => f.addr), logs, advertiserName: projectName, advertiserDomain: targetDomain, skipped: false })
@@ -458,8 +448,8 @@ export async function POST(req: NextRequest) {
   let skipped = false
 
   // Lấy emails đã có trong DB để tránh trùng (chỉ dùng cho !dryRun)
-  const { data: existing } = await supabase.from('emails').select('address')
-  const emailSet = new Set((existing || []).map((e: any) => e.address.toLowerCase()))
+  const { rows: existing } = await db.query('SELECT address FROM emails')
+  const emailSet = new Set(existing.map((e: any) => e.address.toLowerCase()))
 
   // Lấy emails từ RSS preloaded nếu có
   let rssEmails: string[] = preloadedEmails?.[articleUrl]?.emails || []
@@ -496,11 +486,10 @@ export async function POST(req: NextRequest) {
       logs.push(`  → [Bài] ${a}`)
       // Chỉ save DB khi không dryRun và chưa có
       if (!dryRun && !emailSet.has(a)) {
-        await supabase.from('emails').insert({
-          address: a, source_url: articleUrl,
-          domain: advertiserDomain, status: 'new',
-          source_type: 'article', contact_name: advertiserName || null,
-        })
+        await db.query(
+          'INSERT INTO emails (address, source_url, domain, status, source_type, contact_name) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (address) DO NOTHING',
+          [a, articleUrl, advertiserDomain, 'new', 'article', advertiserName || null]
+        )
         emailSet.add(a)
         saved.push(a)
       }
@@ -519,11 +508,10 @@ export async function POST(req: NextRequest) {
         logs.push(`  → [Hunter${isBOD(h.position) ? 'BOD👑' : ''}] ${a} (${h.name})`)
         // Chỉ save DB khi không dryRun và chưa có
         if (!dryRun && !emailSet.has(a)) {
-          await supabase.from('emails').insert({
-            address: a, source_url: articleUrl,
-            domain: advertiserDomain, status: 'new',
-            source_type: 'hunter_bod', contact_name: h.name || null, position: h.position || null,
-          })
+          await db.query(
+            'INSERT INTO emails (address, source_url, domain, status, source_type, contact_name, position) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (address) DO NOTHING',
+            [a, articleUrl, advertiserDomain, 'new', 'hunter_bod', h.name || null, h.position || null]
+          )
           emailSet.add(a)
           saved.push(a)
         }
@@ -533,18 +521,16 @@ export async function POST(req: NextRequest) {
 
   // Ghi nhận đã quét (chỉ khi không dryRun)
   if (!dryRun && siteId) {
-    await supabase.from('crawled_pages').insert({
-      site_id: siteId, page_url: articleUrl,
-      page_title: advertiserName || articleUrl.split('/').pop() || '',
-      emails_found: saved.length,
-    }).select()
-    const { count } = await supabase
-      .from('crawled_pages').select('*', { count: 'exact', head: true }).eq('site_id', siteId)
-    await supabase.from('competitor_sites').update({
-      last_crawled_at: new Date().toISOString(),
-      total_pages_crawled: count || 0,
-      total_emails_found: emailSet.size,
-    }).eq('id', siteId)
+    await db.query(
+      'INSERT INTO crawled_pages (site_id, page_url, page_title, emails_found) VALUES ($1, $2, $3, $4) ON CONFLICT (page_url) DO NOTHING',
+      [siteId, articleUrl, advertiserName || articleUrl.split('/').pop() || '', JSON.stringify(saved)]
+    )
+    const { rows: countRows } = await db.query('SELECT COUNT(*) as exact FROM crawled_pages WHERE site_id = $1', [siteId])
+    const count = parseInt(countRows[0]?.exact || '0', 10)
+    await db.query(
+      'UPDATE competitor_sites SET last_crawled_at = $1, total_pages_crawled = $2, total_emails_found = $3 WHERE id = $4',
+      [new Date().toISOString(), count, emailSet.size, siteId]
+    )
   }
 
   return NextResponse.json({ found, saved, logs, advertiserName, advertiserDomain, skipped })
@@ -552,7 +538,7 @@ export async function POST(req: NextRequest) {
 
 
 export async function DELETE() {
-  await supabase.from('crawled_pages').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-  await supabase.from('competitor_sites').update({ total_pages_crawled: 0, last_crawled_at: null }).neq('id', '00000000-0000-0000-0000-000000000000')
+  await db.query('DELETE FROM crawled_pages')
+  await db.query('UPDATE competitor_sites SET total_pages_crawled = 0, last_crawled_at = NULL')
   return NextResponse.json({ ok: true })
 }

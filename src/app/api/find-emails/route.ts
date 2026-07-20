@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { supabase } from '@/lib/supabase'
+import { db } from '@/lib/db'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -9,8 +9,8 @@ export async function POST(req: NextRequest) {
   if (!urls?.length) return NextResponse.json({ error: 'Không có URL' }, { status: 400 })
 
   // Load existing emails for dedup
-  const { data: existing } = await supabase.from('emails').select('address')
-  const existingSet = new Set((existing || []).map((e: any) => e.address.toLowerCase()))
+  const { rows: existing } = await db.query('SELECT address FROM emails')
+  const existingSet = new Set(existing.map((e: any) => e.address.toLowerCase()))
 
   const results: any[] = []
 
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     const domain = url.replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
     try {
       const msg = await anthropic.messages.create({
-        model: 'claude-sonnet-4-5',
+        model: 'claude-3-5-sonnet-20240620',
         max_tokens: 300,
         messages: [{
           role: 'user',
@@ -38,12 +38,17 @@ Return ONLY valid JSON, no markdown:
         const addr = e.addr?.toLowerCase?.()
         if (!addr || !addr.includes('@')) continue
         if (existingSet.has(addr)) continue
-        const { data, error } = await supabase.from('emails')
-          .insert({ address: addr, source_url: url, domain, status: 'new', owner_id: owner_id || null })
-          .select().single()
-        if (!error && data) {
-          existingSet.add(addr)
-          added.push({ addr, page: e.page })
+        try {
+          const { rows: inserted } = await db.query(
+            'INSERT INTO emails (address, source_url, domain, status, owner_id) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (address) DO NOTHING RETURNING *',
+            [addr, url, domain, 'new', owner_id || null]
+          )
+          if (inserted.length > 0) {
+            existingSet.add(addr)
+            added.push({ addr, page: e.page })
+          }
+        } catch (dbErr) {
+          // ignore insert errors for individual emails
         }
       }
       results.push({ url, domain, found: found.length, added: added.length, emails: added })
