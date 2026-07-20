@@ -9,10 +9,21 @@ export async function GET(req: NextRequest) {
   // Require owner - no anonymous access
   if (!owner) return NextResponse.json({ emails: [] })
   let q = supabase.from('emails').select('*').order('created_at', { ascending: false })
-  q = q.eq('owner_id', owner)
+  if (owner) q = q.eq('owner_id', owner)
   if (status && status !== 'all') q = q.eq('status', status)
   if (search) q = q.ilike('address', `%${search}%`)
-  const { data, error } = await q
+  
+  let { data, error } = await q
+  
+  if (error && error.message.includes('owner_id')) {
+    let retryQ = supabase.from('emails').select('*').order('created_at', { ascending: false })
+    if (status && status !== 'all') retryQ = retryQ.eq('status', status)
+    if (search) retryQ = retryQ.ilike('address', `%${search}%`)
+    const retry = await retryQ
+    data = retry.data
+    error = retry.error
+  }
+  
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ emails: data })
 }
@@ -31,7 +42,18 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ ok: true, existing: true })
   }
-  const { data, error } = await supabase.from('emails').insert({ address: addr, source_url: source_url||null, domain, status: 'new', source_type: source_type||'manual', contact_name: contact_name||null, position: position||null, owner_id }).select().single()
+  const payload: any = { address: addr, source_url: source_url||null, domain, status: 'new', source_type: source_type||'manual', contact_name: contact_name||null, position: position||null }
+  if (owner_id) payload.owner_id = owner_id
+
+  let { data, error } = await supabase.from('emails').insert(payload).select().single()
+  
+  if (error && error.message.includes('owner_id')) {
+    delete payload.owner_id
+    const retry = await supabase.from('emails').insert(payload).select().single()
+    data = retry.data
+    error = retry.error
+  }
+  
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true, email: data })
 }

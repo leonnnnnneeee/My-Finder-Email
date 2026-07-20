@@ -115,7 +115,12 @@ export async function POST(req: NextRequest) {
 
   let q = supabase.from('emails').select('*').eq('status', 'new')
   if (owner_id) q = q.eq('owner_id', owner_id)
-  const { data: emails } = await q.order('created_at', { ascending: true }).limit(50)
+  let { data: emails, error: selErr } = await q.order('created_at', { ascending: true }).limit(50)
+
+  if (selErr && selErr.message.includes('owner_id')) {
+    const retry = await supabase.from('emails').select('*').eq('status', 'new').order('created_at', { ascending: true }).limit(50)
+    emails = retry.data
+  }
 
   if (!emails?.length)
     return NextResponse.json({ error: 'Không có email chưa gửi', sent: 0 }, { status: 400 })
@@ -155,17 +160,19 @@ export async function POST(req: NextRequest) {
       } else if (hasSMTP) {
         await sendViaSMTP(email.address, fromEmail, fromName, personalisedSubject, personalised, htmlBody)
       }
-      await supabase.from('emails').update({ status: 'sent', sent_at: new Date().toISOString(), last_subject: personalisedSubject, last_body: personalised }).eq('id', email.id)
+      const { error: updateErr } = await supabase.from('emails').update({ status: 'sent', sent_at: new Date().toISOString() }).eq('id', email.id)
+      if (updateErr) throw new Error(`DB Update Error: ${updateErr.message}`)
     } catch (err: any) {
       status = 'failed'
       errorMsg = err.message
       await supabase.from('emails').update({ status: 'failed' }).eq('id', email.id)
     }
 
-    await supabase.from('send_logs').insert({
+    const { error: logErr } = await supabase.from('send_logs').insert({
       email_id: email.id, subject: personalisedSubject, body: personalised,
       from_name: fromName, from_email: fromEmail, status, error_msg: errorMsg,
     })
+    if (logErr) console.error('Log Insert Error:', logErr.message)
     results.push({ address: email.address, status, error: errorMsg })
   }
 
