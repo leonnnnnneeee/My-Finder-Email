@@ -345,10 +345,23 @@ export async function GET(req: NextRequest) {
   }
 
   // GET default: danh sách sites
-  const { data: sites } = await supabase
+  let q = supabase
     .from('competitor_sites')
     .select('id, url, domain, last_crawled_at, total_pages_crawled, total_emails_found')
-    .order('domain', { ascending: true })
+    
+  const owner = searchParams.get('owner')
+  if (owner) q = q.eq('owner_id', owner)
+  
+  let { data: sites, error } = await q.order('domain', { ascending: true })
+  
+  if (error && error.message.includes('owner_id')) {
+    const retry = await supabase
+      .from('competitor_sites')
+      .select('id, url, domain, last_crawled_at, total_pages_crawled, total_emails_found')
+      .order('domain', { ascending: true })
+    sites = retry.data
+  }
+  
   return NextResponse.json({ sites: sites || [] })
 }
 
@@ -356,15 +369,32 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const body = await req.json()
 
-  // Init site (không có articleUrl)
   if (!body.articleUrl) {
-    const { siteUrl } = body
+    const { siteUrl, owner_id } = body
     if (!siteUrl) return NextResponse.json({ error: 'Missing siteUrl' }, { status: 400 })
     const domain = siteUrl.replace(/https?:\/\//, '').split('/')[0].replace('www.', '')
-    const { data: site } = await supabase
+    
+    // Create the insert payload, dynamically adding owner_id if provided
+    const payload: any = { url: siteUrl, domain, last_crawled_at: new Date().toISOString() }
+    if (owner_id) payload.owner_id = owner_id
+
+    let { data: site, error } = await supabase
       .from('competitor_sites')
-      .upsert({ url: siteUrl, domain, last_crawled_at: new Date().toISOString() }, { onConflict: 'url' })
+      .upsert(payload, { onConflict: 'url' })
       .select().single()
+      
+    // Fallback if owner_id doesn't exist in the database schema
+    if (error && error.message.includes('owner_id')) {
+      delete payload.owner_id
+      const retry = await supabase
+        .from('competitor_sites')
+        .upsert(payload, { onConflict: 'url' })
+        .select().single()
+      site = retry.data
+      error = retry.error
+    }
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ siteId: site?.id, domain })
   }
 

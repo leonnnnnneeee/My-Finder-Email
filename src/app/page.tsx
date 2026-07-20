@@ -222,8 +222,13 @@ export default function Page() {
 
   const loadSites = useCallback(async () => {
     try {
+      let userId = currentUser?.id
+      if (!userId) {
+        try { const s = localStorage.getItem('coincu_user'); if (s) userId = JSON.parse(s).id } catch {}
+      }
+      
       setDebugMsg('Fetching /api/competitors...')
-      const r = await fetch('/api/competitors', { cache: 'no-store' })
+      const r = await fetch('/api/competitors' + (userId ? `?owner=${userId}` : ''), { cache: 'no-store' })
       if (!r.ok) {
         setDebugMsg('HTTP Error: ' + r.status)
         return
@@ -236,16 +241,22 @@ export default function Page() {
           setDebugMsg('Loaded ' + d.sites.length + ' sites.')
         } else if (d.sites && d.sites.length === 0) {
           setDebugMsg('0 sites found, seeding...')
+          let seedErrors = []
           for (const preset of SITES_PRESET) {
             try {
-              await fetch('/api/competitors', {
+              const res = await fetch('/api/competitors', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ siteUrl: 'https://' + preset.d })
+                body: JSON.stringify({ siteUrl: 'https://' + preset.d, owner_id: userId })
               })
-            } catch {}
+              if (!res.ok) {
+                const j = await res.json().catch(()=>({}))
+                seedErrors.push(j.error || res.statusText)
+              }
+            } catch(e: any) { seedErrors.push(e.message) }
           }
-          const r2 = await fetch('/api/competitors', { cache: 'no-store' })
+          if (seedErrors.length > 0) setDebugMsg('Seed Errors: ' + seedErrors.join(', '))
+          const r2 = await fetch('/api/competitors' + (userId ? `?owner=${userId}` : ''), { cache: 'no-store' })
           const d2 = await r2.json()
           if (d2.sites) {
             setSites(d2.sites)
