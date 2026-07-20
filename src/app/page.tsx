@@ -230,7 +230,8 @@ export default function Page() {
       setDebugMsg('Fetching /api/competitors...')
       const r = await fetch('/api/competitors' + (userId ? `?owner=${userId}` : ''), { cache: 'no-store' })
       if (!r.ok) {
-        setDebugMsg('HTTP Error: ' + r.status)
+        const errText = await r.text()
+        setDebugMsg('HTTP Error: ' + r.status + ' - ' + errText)
         return
       }
       const text = await r.text()
