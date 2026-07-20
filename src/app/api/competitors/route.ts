@@ -347,19 +347,25 @@ export async function GET(req: NextRequest) {
   // GET default: danh sách sites
   let q = supabase
     .from('competitor_sites')
-    .select('id, url, domain, last_crawled_at, total_pages_crawled, total_emails_found')
+    .select('*')
     
   const owner = searchParams.get('owner')
   if (owner) q = q.eq('owner_id', owner)
   
   let { data: sites, error } = await q.order('domain', { ascending: true })
+  const errMsg = String(error?.message || error || '')
   
-  if (error && error.message.includes('owner_id')) {
+  if (error && errMsg.includes('owner_id')) {
     const retry = await supabase
       .from('competitor_sites')
-      .select('id, url, domain, last_crawled_at, total_pages_crawled, total_emails_found')
+      .select('*')
       .order('domain', { ascending: true })
     sites = retry.data
+    error = retry.error
+  }
+  
+  if (error) {
+    return NextResponse.json({ error: String(error?.message || error) }, { status: 500 })
   }
   
   return NextResponse.json({ sites: sites || [] })
@@ -383,8 +389,9 @@ export async function POST(req: NextRequest) {
       .upsert(payload, { onConflict: 'url' })
       .select().single()
       
+    const errMsg = String(error?.message || error || '')
     // Fallback if owner_id doesn't exist in the database schema
-    if (error && error.message.includes('owner_id')) {
+    if (error && errMsg.includes('owner_id')) {
       delete payload.owner_id
       const retry = await supabase
         .from('competitor_sites')
@@ -394,7 +401,7 @@ export async function POST(req: NextRequest) {
       error = retry.error
     }
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (error) return NextResponse.json({ error: String(error?.message || error) }, { status: 500 })
     return NextResponse.json({ siteId: site?.id, domain })
   }
 

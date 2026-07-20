@@ -116,8 +116,9 @@ export async function POST(req: NextRequest) {
   let q = supabase.from('emails').select('*').eq('status', 'new')
   if (owner_id) q = q.eq('owner_id', owner_id)
   let { data: emails, error: selErr } = await q.order('created_at', { ascending: true }).limit(50)
+  const errMsg = String(selErr?.message || selErr || '')
 
-  if (selErr && selErr.message.includes('owner_id')) {
+  if (selErr && errMsg.includes('owner_id')) {
     const retry = await supabase.from('emails').select('*').eq('status', 'new').order('created_at', { ascending: true }).limit(50)
     emails = retry.data
   }

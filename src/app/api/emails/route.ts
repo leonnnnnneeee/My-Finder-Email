@@ -14,8 +14,9 @@ export async function GET(req: NextRequest) {
   if (search) q = q.ilike('address', `%${search}%`)
   
   let { data, error } = await q
+  const errMsg = String(error?.message || error || '')
   
-  if (error && error.message.includes('owner_id')) {
+  if (error && errMsg.includes('owner_id')) {
     let retryQ = supabase.from('emails').select('*').order('created_at', { ascending: false })
     if (status && status !== 'all') retryQ = retryQ.eq('status', status)
     if (search) retryQ = retryQ.ilike('address', `%${search}%`)
@@ -24,7 +25,7 @@ export async function GET(req: NextRequest) {
     error = retry.error
   }
   
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: String(error?.message || error) }, { status: 500 })
   return NextResponse.json({ emails: data })
 }
 
@@ -46,15 +47,16 @@ export async function POST(req: NextRequest) {
   if (owner_id) payload.owner_id = owner_id
 
   let { data, error } = await supabase.from('emails').insert(payload).select().single()
+  const errMsg = String(error?.message || error || '')
   
-  if (error && error.message.includes('owner_id')) {
+  if (error && errMsg.includes('owner_id')) {
     delete payload.owner_id
     const retry = await supabase.from('emails').insert(payload).select().single()
     data = retry.data
     error = retry.error
   }
   
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ ok: false, error: String(error?.message || error) }, { status: 500 })
   return NextResponse.json({ ok: true, email: data })
 }
 
